@@ -1,0 +1,3 @@
+requests
+earthaccess
+boto3
