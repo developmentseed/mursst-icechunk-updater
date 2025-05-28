@@ -8,6 +8,7 @@ from aws_cdk import (
     RemovalPolicy,
 )
 from constructs import Construct
+import os
 QUEUE_ARN_FILE = '../queue_arn.txt'
 
 class MursstStack(Stack):
@@ -22,22 +23,35 @@ class MursstStack(Stack):
             auto_delete_objects=True
         )
 
-        # Create IAM role for Lambda
-        lambda_role = iam.Role(
-            self, "MursstLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaSQSQueueExecutionRole"),
-                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
-            ]
-        )
+        # Create or import IAM role for Lambda based on environment variable
+        lambda_role = None
+        if 'LAMBDA_FUNCTION_ROLE' in os.environ:
+            # Import existing role using ARN from environment variable
+            lambda_role = iam.Role.from_role_arn(
+                self, "ImportedMursstLambdaRole",
+                role_arn=os.environ['LAMBDA_FUNCTION_ROLE']
+            )
+        else:
+            # Create new role if environment variable is not set
+            lambda_role = iam.Role(
+                self, "MursstLambdaRole",
+                assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+                managed_policies=[
+                    iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaSQSQueueExecutionRole"),
+                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+                ]
+            )
 
-        # Create Lambda function
+        # Create Lambda function using the determined role
         lambda_function = _lambda.Function(
             self, "MursstCmrNotificationProcessor",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_docker_build(
+                path=os.path.abspath("."),
+                file="lambda/Dockerfile",
+                platform="linux/amd64",
+            ),
             role=lambda_role,
             environment={
                 "S3_BUCKET_NAME": bucket.bucket_name

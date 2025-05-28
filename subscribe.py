@@ -1,5 +1,4 @@
 import requests
-import json
 import earthaccess
 from config import QUEUE_ARN_FILE, COLLECTION_CONCEPT_ID, COLLECTION_NAME, SUBSCRIBER_ID
 
@@ -48,7 +47,7 @@ def create_cmr_subscription():
             json=subscription_request
         )
         
-        if response.status_code == 200:
+        if response.status_code == 201:
             print("Successfully created CMR subscription")
             print(f"Response: {response.text}")
         else:

@@ -32,7 +32,9 @@ $ uv pip install -r requirements.txt
 
 ## Deployment
 
-To deploy the infrastructure:
+To deploy the infrastructure, first ensure your environment is configured with AWS credentials. 
+
+Then run the following CDK commands:
 
 1. Synthesize the CloudFormation template:
 ```bash
@@ -40,6 +42,15 @@ $ cdk synth
 ```
 
 2. Deploy the stack to your AWS account:
+
+If there is an existing role that should be attached to this lambda function, export the `LAMBDA_FUNCTION_ROLE` variable assigned to that role name, for example:
+
+```bash
+export LAMBDA_FUNCTION_ROLE=arn:aws:iam::XXX:role/lambda-role-name
+```
+
+and then run:
+
 ```bash
 $ cdk deploy
 ```
@@ -56,9 +67,3 @@ $ cdk deploy
 
 The infrastructure can be configured through environment variables and CDK context. See the `app.py` file for available configuration options.
 
-## Maintenance
-
-To add additional dependencies, add them to your `setup.py` file and rerun:
-```bash
-$ uv pip install -r requirements.txt
-```
