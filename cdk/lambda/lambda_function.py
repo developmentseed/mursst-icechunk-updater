@@ -80,8 +80,8 @@ def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date:
     vds.virtualize.to_icechunk(session.store, append_dim='time')
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
 
-def write_to_icechunk_or_fail(granule_cmr_url: str, earthdata_username: str, earthdata_password: str):
-    earthaccess.login(earthdata_username, earthdata_password)
+def write_to_icechunk_or_fail(granule_cmr_url: str):
+    earthaccess.login()
     ea_creds = earthaccess.get_s3_credentials(daac='PODAAC')
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
@@ -120,16 +120,14 @@ def get_secret():
             raise ValueError("Secret is not a string")
 
 def lambda_handler(event, context: dict = {}):
-    # Fetch secrets
-    secrets = get_secret()
-
-    # Use secrets in your code
-    # secrets['your_secret_key']
-
     """
     Process messages from SQS queue containing CMR notifications.
     Each message contains information about new or updated granules.
     """
+    # Fetch secrets
+    secrets = get_secret()
+    os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
+    os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
     print(f"Received event: {json.dumps(event)}")
 
     # Initialize S3 client for storing processed messages
@@ -183,7 +181,7 @@ def lambda_handler(event, context: dict = {}):
             # example mur sst granule URL: https://cmr.earthdata.nasa.gov/search/concepts/G3507162174-POCLOUD
             try:
                 granule_cmr_url = message.get('location')
-                write_to_icechunk_or_fail(granule_cmr_url, secrets['EARTHDATA_USERNAME'], secrets['EARTHDATA_PASSWORD'])
+                write_to_icechunk_or_fail(granule_cmr_url)
             except Exception as e:
                 print(f"Error writing to icechunk: {e}")
                 s3_key = f"cmr-notifications/errors/{message_body.get('MessageId')}_{timestamp}.json"
