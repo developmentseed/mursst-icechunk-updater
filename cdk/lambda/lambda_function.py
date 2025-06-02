@@ -30,7 +30,6 @@ def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dic
         storage=storage,
         config=config,
     )
-    import pdb; pdb.set_trace()
     if ea_creds:
         earthdata_credentials = icechunk.containers_credentials(
             s3=icechunk.s3_credentials(
@@ -88,7 +87,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     session = repo.writable_session(branch="main")
     last_timestep = get_last_timestep(session)
     granule_data = requests.get(granule_cmr_url).json()
-    granule_end_date_str = granule_data['TemporalExtent']['EndingDateTime']
+    granule_end_date_str = granule_data['TemporalExtent']['RangeDateTime']['EndingDateTime']
     granule_end_date = datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
     # check if the granule is at leastone day greater than the last timestep
     one_day_later = last_timestep.date() + timedelta(days=1)
