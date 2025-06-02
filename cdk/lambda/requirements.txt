@@ -1,4 +1,5 @@
-earthaccess
+dask
+earthaccess>=0.13.0
 icechunk>=0.2.0
 zarr>=3.0.0
 requests>=2.25.0

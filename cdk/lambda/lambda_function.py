@@ -76,7 +76,8 @@ def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date:
     )
     vds.drop_vars(drop_vars, errors="ignore")
     # write to the icechunk store
-    vds.virtualize.to_icechunk(session.store, append_dim='time')
+    with session.allow_pickling():
+        vds.virtualize.to_icechunk(session.store, append_dim='time')
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
 
 def write_to_icechunk_or_fail(granule_cmr_url: str):
@@ -91,7 +92,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     granule_end_date = datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
     # check if the granule is at leastone day greater than the last timestep
     one_day_later = last_timestep.date() + timedelta(days=1)
-    if granule_end_date >= one_day_later:
+    if datetime.date(granule_end_date) >= one_day_later:
         # write to the icechunk store
         write_to_icechunk(session, one_day_later, granule_end_date, granule_data['GranuleUR'])
     else:
