@@ -54,7 +54,8 @@ class MursstStack(Stack):
             ),
             role=lambda_role,
             environment={
-                "S3_BUCKET_NAME": bucket.bucket_name
+                "S3_BUCKET_NAME": bucket.bucket_name,
+                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"  # Replace with your secret ARN
             },
             timeout=Duration.seconds(30),
             memory_size=128
@@ -63,18 +64,40 @@ class MursstStack(Stack):
         # Reference existing SQS queue
         with open(QUEUE_ARN_FILE, 'r') as f:
             queue_arn = f.read().strip()
-            
+
         queue = sqs.Queue.from_queue_arn(
             self, "MursstCmrNotificationQueue",
             queue_arn=queue_arn
+        )
+
+        # Add SQS permissions to the role
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                ],
+                resources=[queue.queue_arn]
+            )
         )
 
         # Add SQS trigger to Lambda
         lambda_function.add_event_source_mapping(
             "MursstSqsTrigger",
             event_source_arn=queue.queue_arn,
-            batch_size=10
+            batch_size=1
         )
 
         # Grant Lambda permissions to write to S3 bucket
-        bucket.grant_write(lambda_function) 
+        bucket.grant_write(lambda_function)
+
+        # Grant Lambda permissions to access Secrets Manager
+        lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "secretsmanager:GetSecretValue"
+                ],
+                resources=["arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"]  # Replace with your secret ARN
+            )
+        )

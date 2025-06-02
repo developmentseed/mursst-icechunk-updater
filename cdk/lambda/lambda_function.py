@@ -1,3 +1,4 @@
+import earthaccess
 import json
 import icechunk
 import boto3
@@ -7,13 +8,17 @@ import virtualizarr as vz
 import zarr
 import numpy as np
 import requests
+from typing import Optional
 
 bucket = 'nasa-eodc-public'
-store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1"
+store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
+drop_vars = ["dt_1km_data", "sst_anomaly"]
+collection_short_name = "MUR-JPL-L4-GLOB-v4.1"
 
-def open_icechunk_repo(bucket_name: str, store_name: str):
+# 🍱 there is a lot of overlap between this and lithops code and icechunk-nasa code 🤔
+def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dict] = None):
     storage = icechunk.s3_storage(
-        bucket=bucket,
+        bucket=bucket_name,
         prefix=f"icechunk/{store_name}",
         anonymous=True
     )
@@ -25,6 +30,16 @@ def open_icechunk_repo(bucket_name: str, store_name: str):
         storage=storage,
         config=config,
     )
+    import pdb; pdb.set_trace()
+    if ea_creds:
+        earthdata_credentials = icechunk.containers_credentials(
+            s3=icechunk.s3_credentials(
+                access_key_id=ea_creds['accessKeyId'],
+                secret_access_key=ea_creds['secretAccessKey'],
+                session_token=ea_creds['sessionToken']
+            )
+        )
+        repo_config['virtual_chunk_credentials'] = earthdata_credentials
     return icechunk.Repository.open(**repo_config)
 
 def get_last_timestep(session: icechunk.Session):
@@ -38,55 +53,79 @@ def get_last_timestep(session: icechunk.Session):
 def open_virtual_dataset(dmrpp_file: str):
     # open the virtual dataset
     # return the virtual dataset
+    # TODO: use earthaccess
     vds = vz.open_virtual_dataset(
         dmrpp_file,
         indexes={},
         filetype="dmrpp",
     )
-    return vds.drop_vars(["dt_1km_data", "sst_anomaly"])
-
-def get_direct_access_url(granule_data: dict) -> str:
-    """
-    Extract the direct access S3 URL from CMR granule metadata.
-
-    Args:
-        granule_data (dict): The CMR granule metadata JSON as a dictionary
-
-    Returns:
-        str: The S3 URL for direct access to the granule
-    """
-    for url_info in granule_data.get('RelatedUrls', []):
-        if url_info.get('Type') == 'GET DATA VIA DIRECT ACCESS':
-            return url_info.get('URL')
-    raise ValueError("No direct access URL found in granule metadata")
+    return vds.drop_vars(drop_vars)
 
 
-def write_to_icechunk(session: icechunk.Session, granule_data: str, granule_end_date: datetime):
-    direct_access_url = get_direct_access_url(granule_data)
-    # TODO: make this configurable, so we don't have to be working with dmrpp file
-    dmrpp_file = direct_access_url + '.dmrpp'
-    vds = open_virtual_dataset(dmrpp_file)
+def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date: datetime, granule_ur: str):
+    granule_results = earthaccess.search_data(
+        temporal=(start_date, end_date), short_name=collection_short_name
+    )
+    vds = earthaccess.open_virtual_mfdataset(
+        granule_results,
+        access="direct",
+        load=False,
+        concat_dim="time",
+        coords="minimal",
+        compat="override",
+        combine_attrs="override",
+    )
+    vds.drop_vars(drop_vars, errors="ignore")
     # write to the icechunk store
     vds.virtualize.to_icechunk(session.store, append_dim='time')
-    return session.commit(f"Committed data for {granule_end_date} using {granule_data['GranuleUR']}")
+    return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
 
-def write_to_icechunk_or_fail(granule_cmr_url: str):
+def write_to_icechunk_or_fail(granule_cmr_url: str, earthdata_username: str, earthdata_password: str):
+    earthaccess.login(earthdata_username, earthdata_password)
+    ea_creds = earthaccess.get_s3_credentials(daac='PODAAC')
     # check date is next datetime for the icechunk store or fail
-    repo = open_icechunk_repo(bucket, store_name)
-    session = repo.readonly_session(branch="main")
+    repo = open_icechunk_repo(bucket, store_name, ea_creds)
+    session = repo.writable_session(branch="main")
     last_timestep = get_last_timestep(session)
     granule_data = requests.get(granule_cmr_url).json()
     granule_end_date_str = granule_data['TemporalExtent']['EndingDateTime']
     granule_end_date = datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
-    # check if the granule is one day greater than the last timestep
-    if granule_end_date == last_timestep.date() + timedelta(days=1):
+    # check if the granule is at leastone day greater than the last timestep
+    one_day_later = last_timestep.date() + timedelta(days=1)
+    if granule_end_date >= one_day_later:
         # write to the icechunk store
-        write_to_icechunk(session, granule_data, granule_end_date)
+        write_to_icechunk(session, one_day_later, granule_end_date, granule_data['GranuleUR'])
     else:
         # fail
-        raise Exception(f"Granule {granule_cmr_url} end date {granule_end_date} is not greater than the last timestep {last_timestep}")
+        print(f"Granule {granule_cmr_url} end date {granule_end_date} is not greater than the last timestep {last_timestep}")
 
-def lambda_handler(event, context):
+def get_secret():
+    secret_name = os.environ['SECRET_ARN']
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=session.region_name
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except Exception as e:
+        raise e
+    else:
+        if 'SecretString' in get_secret_value_response:
+            return json.loads(get_secret_value_response['SecretString'])
+        else:
+            raise ValueError("Secret is not a string")
+
+def lambda_handler(event, context: dict = {}):
+    # Fetch secrets
+    secrets = get_secret()
+
+    # Use secrets in your code
+    # secrets['your_secret_key']
+
     """
     Process messages from SQS queue containing CMR notifications.
     Each message contains information about new or updated granules.
@@ -107,20 +146,20 @@ def lambda_handler(event, context):
             # Extract relevant information
             # example message body:
             # {
-                # "Type" : "Notification",
-                # "MessageId" : "fbdb230e-befe-56a6-99ff-7cbe3f7e74ec",
-                # "TopicArn" : "<CMR Topic ARN>",
-                # "Subject" : "Update Notification",
-                # "Message" : "{\"concept-id\": \"G1200463969-CMR_ONLY\", \"granule-ur\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01\", \"producer-granule-id\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01.nc\", \"location\": \"https://cmr.earthdata.nasa.gov/search/concepts/G1200463969-CMR_ONLY/16\"}",
-                # "Timestamp" : "2024-11-14T22:52:48.010Z",
-                # "SignatureVersion" : "1",
-                # "Signature" : "VElbKqyRuWNDgI/GB...rjTP+yhjyzdWLomsGA==",
-                # "SigningCertURL" : "https://sns.<region>.amazonaws.com/SimpleNotificationService-9c6465fa...1136.pem",
-                # "UnsubscribeURL" : "https://sns.<region>.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=<Subscription ARN>",
-                # "MessageAttributes" : {
-                #     "collection-concept-id" : {"Type":"String","Value":"C1200463968-CMR_ONLY"},
-                #     "mode" : {"Type":"String","Value":"Update"}
-                # }
+            #     "Type" : "Notification",
+            #     "MessageId" : "fbdb230e-befe-56a6-99ff-7cbe3f7e74ec",
+            #     "TopicArn" : "<CMR Topic ARN>",
+            #     "Subject" : "Update Notification",
+            #     "Message" : "{\"concept-id\": \"G1200463969-CMR_ONLY\", \"granule-ur\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01\", \"producer-granule-id\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01.nc\", \"location\": \"https://cmr.earthdata.nasa.gov/search/concepts/G1200463969-CMR_ONLY/16\"}",
+            #     "Timestamp" : "2024-11-14T22:52:48.010Z",
+            #     "SignatureVersion" : "1",
+            #     "Signature" : "VElbKqyRuWNDgI/GB...rjTP+yhjyzdWLomsGA==",
+            #     "SigningCertURL" : "https://sns.<region>.amazonaws.com/SimpleNotificationService-9c6465fa...1136.pem",
+            #     "UnsubscribeURL" : "https://sns.<region>.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=<Subscription ARN>",
+            #     "MessageAttributes" : {
+            #         "collection-concept-id" : {"Type":"String","Value":"C1200463968-CMR_ONLY"},
+            #         "mode" : {"Type":"String","Value":"Update"}
+            #     }
             # }
             message = json.loads(message_body.get('Message'))
 
@@ -142,20 +181,20 @@ def lambda_handler(event, context):
 
             # next I would want to check if the date is the next datetime for the collection
             # example mur sst granule URL: https://cmr.earthdata.nasa.gov/search/concepts/G3507162174-POCLOUD
-            # try:
-            #     granule_cmr_url = message.get('location')
-            #     write_to_icechunk_or_fail(granule_cmr_url)
-            # except Exception as e:
-            #     print(f"Error writing to icechunk: {e}")
-            #     s3_key = f"cmr-notifications/errors/{message_body.get('MessageId')}_{timestamp}.json"
-            #     # write error to s3
-            #     s3.put_object(
-            #         Bucket=bucket_name,
-            #         Key=s3_key,
-            #         Body=json.dumps(e),
-            #         ContentType='application/json'
-            #     )
-            #     raise
+            try:
+                granule_cmr_url = message.get('location')
+                write_to_icechunk_or_fail(granule_cmr_url, secrets['EARTHDATA_USERNAME'], secrets['EARTHDATA_PASSWORD'])
+            except Exception as e:
+                print(f"Error writing to icechunk: {e}")
+                s3_key = f"cmr-notifications/errors/{message_body.get('MessageId')}_{timestamp}.json"
+                # write error to s3
+                s3.put_object(
+                    Bucket=bucket_name,
+                    Key=s3_key,
+                    Body=json.dumps(e),
+                    ContentType='application/json'
+                )
+                raise
 
 
         return {
