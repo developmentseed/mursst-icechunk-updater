@@ -21,7 +21,7 @@ def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dic
     storage = icechunk.s3_storage(
         bucket=bucket_name,
         prefix=f"icechunk/{store_name}",
-        anonymous=True
+        anonymous=False
     )
 
     config = icechunk.RepositoryConfig.default()
@@ -50,48 +50,22 @@ def get_last_timestep(session: icechunk.Session):
     dt_array = np.array([epoch + timedelta(seconds=int(t)) for t in zarr_store['time'][:]])
     return dt_array[-1]
 
-def open_virtual_dataset(dmrpp_file: str):
-    # open the virtual dataset
-    # return the virtual dataset
-    vds = vz.open_virtual_dataset(
-        dmrpp_file,
-        indexes={},
-        filetype="dmrpp",
-    )
-    return vds.drop_vars(drop_vars)
-
-
 def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date: datetime, granule_ur: str):
     granule_results = earthaccess.search_data(
         temporal=(start_date, end_date), short_name=collection_short_name
     )
     s3_creds = earthaccess.get_s3_credentials(daac='PODAAC')
-    reader_options = dict(
-        anon=False,
-        key=s3_creds['accessKeyId'],
-        secret=s3_creds['secretAccessKey'],
-        token=s3_creds['sessionToken']
-    )
-    s3_links = [g.data_links(access='direct')[0] for g in granule_results]
-    vdss = [open_virtual_dataset(url, indexes={}, reader_options={'storage_options': reader_options}) for url in s3_links]
-    # vds = earthaccess.open_virtual_mfdataset(
-    #     granule_results,
-    #     access="direct",
-    #     load=False,
-    #     concat_dim="time",
-    #     coords="minimal",
-    #     compat="override",
-    #     combine_attrs="override",
-    # )
-    combined_vds = xr.concat(
-        vdss,
-        dim="time",
+    vds = earthaccess.open_virtual_mfdataset(
+        granule_results,
+        access="direct",
+        load=False,
+        concat_dim="time",
         coords="minimal",
         compat="override",
         combine_attrs="override",
     )
-    vds = combined_vds.drop_vars(drop_vars, errors="ignore")
     # write to the icechunk store
+    vds = vds.drop_vars(drop_vars, errors="ignore")
     with session.allow_pickling():
         vds.virtualize.to_icechunk(session.store, append_dim='time')
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")

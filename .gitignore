@@ -12,3 +12,4 @@ cdk.out
 # project files
 queue_arn.txt
 config.py
+*.ipynb_checkpoints/
