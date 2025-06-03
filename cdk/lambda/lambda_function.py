@@ -9,6 +9,7 @@ import zarr
 import numpy as np
 import requests
 from typing import Optional
+import xarray as xr
 
 bucket = 'nasa-eodc-public'
 store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
@@ -52,7 +53,6 @@ def get_last_timestep(session: icechunk.Session):
 def open_virtual_dataset(dmrpp_file: str):
     # open the virtual dataset
     # return the virtual dataset
-    # TODO: use earthaccess
     vds = vz.open_virtual_dataset(
         dmrpp_file,
         indexes={},
@@ -65,16 +65,32 @@ def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date:
     granule_results = earthaccess.search_data(
         temporal=(start_date, end_date), short_name=collection_short_name
     )
-    vds = earthaccess.open_virtual_mfdataset(
-        granule_results,
-        access="direct",
-        load=False,
-        concat_dim="time",
+    s3_creds = earthaccess.get_s3_credentials(daac='PODAAC')
+    reader_options = dict(
+        anon=False,
+        key=s3_creds['accessKeyId'],
+        secret=s3_creds['secretAccessKey'],
+        token=s3_creds['sessionToken']
+    )
+    s3_links = [g.data_links(access='direct')[0] for g in granule_results]
+    vdss = [open_virtual_dataset(url, indexes={}, reader_options={'storage_options': reader_options}) for url in s3_links]
+    # vds = earthaccess.open_virtual_mfdataset(
+    #     granule_results,
+    #     access="direct",
+    #     load=False,
+    #     concat_dim="time",
+    #     coords="minimal",
+    #     compat="override",
+    #     combine_attrs="override",
+    # )
+    combined_vds = xr.concat(
+        vdss,
+        dim="time",
         coords="minimal",
         compat="override",
         combine_attrs="override",
     )
-    vds.drop_vars(drop_vars, errors="ignore")
+    vds = combined_vds.drop_vars(drop_vars, errors="ignore")
     # write to the icechunk store
     with session.allow_pickling():
         vds.virtualize.to_icechunk(session.store, append_dim='time')
