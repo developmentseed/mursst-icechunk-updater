@@ -51,10 +51,11 @@ def get_last_timestep(session: icechunk.Session):
     return dt_array[-1]
 
 def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str, granule_ur: str):
+    print("searching for granules")
     granule_results = earthaccess.search_data(
         temporal=(start_date, end_date), short_name=collection_short_name
     )
-    s3_creds = earthaccess.get_s3_credentials(daac='PODAAC')
+    print("opening virtual dataset")
     vds = earthaccess.open_virtual_mfdataset(
         granule_results,
         access="direct",
@@ -66,17 +67,24 @@ def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str,
     )
     # write to the icechunk store
     vds = vds.drop_vars(drop_vars, errors="ignore")
+    print("writing to icechunk")
     with session.allow_pickling():
         vds.virtualize.to_icechunk(session.store, append_dim='time')
+    print("committing")
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
 
 def write_to_icechunk_or_fail(granule_cmr_url: str):
+    print("logging in")
     earthaccess.login()
+    print("getting s3 credentials")
     ea_creds = earthaccess.get_s3_credentials(daac='PODAAC')
+    print("opening icechunk repo")
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
+    print("getting last timestep")
     session = repo.writable_session(branch="main")
     last_timestep = get_last_timestep(session)
+    print("getting granule data")
     granule_data = requests.get(granule_cmr_url).json()
     # the beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.
     granule_end_date_str = granule_data['TemporalExtent']['RangeDateTime']['EndingDateTime']
