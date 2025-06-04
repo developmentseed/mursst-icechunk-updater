@@ -64,12 +64,12 @@ def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str,
         coords="minimal",
         compat="override",
         combine_attrs="override",
+        parallel=False,
     )
     # write to the icechunk store
     vds = vds.drop_vars(drop_vars, errors="ignore")
     print("writing to icechunk")
-    with session.allow_pickling():
-        vds.virtualize.to_icechunk(session.store, append_dim='time')
+    vds.virtualize.to_icechunk(session.store, append_dim='time')
     print("committing")
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
 
@@ -93,7 +93,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     one_day_later = last_timestep.date() + timedelta(days=1)
     if granule_end_date >= one_day_later:
         # write to the icechunk store
-        write_to_icechunk(
+        return write_to_icechunk(
             session,
             str(one_day_later) + " 09:00:00",
             str(granule_end_date) + " 09:00:00",
@@ -102,6 +102,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     else:
         # fail
         print(f"Granule {granule_cmr_url} end date {granule_end_date} is not greater than the last timestep {last_timestep}")
+        return None
 
 def get_secret():
     secret_name = os.environ['SECRET_ARN']
