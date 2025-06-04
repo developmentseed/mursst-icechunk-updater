@@ -50,7 +50,7 @@ def get_last_timestep(session: icechunk.Session):
     dt_array = np.array([epoch + timedelta(seconds=int(t)) for t in zarr_store['time'][:]])
     return dt_array[-1]
 
-def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str, granule_ur: str):
+def write_to_icechunk(repo: icechunk.Repository, start_date: str, end_date: str, granule_ur: str):
     print("searching for granules")
     granule_results = earthaccess.search_data(
         temporal=(start_date, end_date), short_name=collection_short_name
@@ -69,6 +69,7 @@ def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str,
     # write to the icechunk store
     vds = vds.drop_vars(drop_vars, errors="ignore")
     print("writing to icechunk")
+    session = repo.writable_session(branch="main")
     vds.virtualize.to_icechunk(session.store, append_dim='time')
     print("committing")
     return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
@@ -82,7 +83,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
     print("getting last timestep")
-    session = repo.writable_session(branch="main")
+    session = repo.readonly_session(branch="main")
     last_timestep = get_last_timestep(session)
     print("getting granule data")
     granule_data = requests.get(granule_cmr_url).json()
@@ -94,7 +95,7 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     if granule_end_date >= one_day_later:
         # write to the icechunk store
         return write_to_icechunk(
-            session,
+            repo,
             str(one_day_later) + " 09:00:00",
             str(granule_end_date) + " 09:00:00",
             granule_data['GranuleUR']
