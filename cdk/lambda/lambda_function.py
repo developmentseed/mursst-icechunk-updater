@@ -50,7 +50,7 @@ def get_last_timestep(session: icechunk.Session):
     dt_array = np.array([epoch + timedelta(seconds=int(t)) for t in zarr_store['time'][:]])
     return dt_array[-1]
 
-def write_to_icechunk(session: icechunk.Session, start_date: datetime, end_date: datetime, granule_ur: str):
+def write_to_icechunk(session: icechunk.Session, start_date: str, end_date: str, granule_ur: str):
     granule_results = earthaccess.search_data(
         temporal=(start_date, end_date), short_name=collection_short_name
     )
@@ -78,13 +78,19 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     session = repo.writable_session(branch="main")
     last_timestep = get_last_timestep(session)
     granule_data = requests.get(granule_cmr_url).json()
+    # the beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.
     granule_end_date_str = granule_data['TemporalExtent']['RangeDateTime']['EndingDateTime']
-    granule_end_date = datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    granule_end_date = datetime.date(datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ'))
     # check if the granule is at leastone day greater than the last timestep
     one_day_later = last_timestep.date() + timedelta(days=1)
-    if datetime.date(granule_end_date) >= one_day_later:
+    if granule_end_date >= one_day_later:
         # write to the icechunk store
-        write_to_icechunk(session, one_day_later, granule_end_date, granule_data['GranuleUR'])
+        write_to_icechunk(
+            session,
+            str(one_day_later) + " 09:00:00",
+            str(granule_end_date) + " 09:00:00",
+            granule_data['GranuleUR']
+        )
     else:
         # fail
         print(f"Granule {granule_cmr_url} end date {granule_end_date} is not greater than the last timestep {last_timestep}")
