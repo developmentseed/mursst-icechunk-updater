@@ -16,12 +16,23 @@ store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
 drop_vars = ["dt_1km_data", "sst_anomaly"]
 collection_short_name = "MUR-JPL-L4-GLOB-v4.1"
 
+def get_credentials():
+    print("getting credentials")
+    session = boto3.session.Session()
+    creds = session.get_credentials()
+    return icechunk.S3StaticCredentials(
+        access_key_id=creds.access_key,
+        secret_access_key=creds.secret_key,
+        session_token=creds.token
+    )
+    
 # 🍱 there is a lot of overlap between this and lithops code and icechunk-nasa code 🤔
 def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dict] = None):
     storage = icechunk.s3_storage(
         bucket=bucket_name,
         prefix=f"icechunk/{store_name}",
-        anonymous=False
+        anonymous=False,
+        get_credentials=get_credentials
     )
 
     config = icechunk.RepositoryConfig.default()
