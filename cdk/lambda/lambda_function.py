@@ -76,17 +76,17 @@ def write_to_icechunk(repo: icechunk.Repository, granule_results: list[DataGranu
         return session.commit(commit_message)
 
 def write_to_icechunk_or_fail():
-    print("logging in")
+    print("earthaccess.login()")
     earthaccess.login()
-    print("getting s3 credentials")
+    print("earthaccess.get_s3_credentials")
     ea_creds = earthaccess.get_s3_credentials(daac='PODAAC')
     print("opening icechunk repo")
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
-    print("getting last timestep")
     session = repo.readonly_session(branch="main")
     last_timestep = str(get_last_timestep(session)) + " 09:00:00"
-    print("Searching for granules")
+    print(f"Last timestep in icechunk store: {last_timestep}")
+    print("Searching for granules...")
     current_date = str(datetime.now().date()) + " 09:00:00"
     # In CMR, granules have a beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.            
     granule_results = earthaccess.search_data(
@@ -96,8 +96,9 @@ def write_to_icechunk_or_fail():
         print("No granules found")
         return None
     else:
+        print(f"Number of granules found: {len(granule_results)}")
         # write to the icechunk store
-        return write_to_icechunk(repo, granule_results)
+        return write_to_icechunk(repo, granule_results, start_date=last_timestep, end_date=current_date)
 
 def get_secret():
     secret_name = os.environ['SECRET_ARN']
