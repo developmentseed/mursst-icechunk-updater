@@ -1,4 +1,5 @@
 import earthaccess
+from earthaccess import DataGranule
 import json
 import icechunk
 import boto3
@@ -15,7 +16,7 @@ bucket = 'nasa-eodc-public'
 store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
 drop_vars = ["dt_1km_data", "sst_anomaly"]
 collection_short_name = "MUR-JPL-L4-GLOB-v4.1"
-    
+
 # 🍱 there is a lot of overlap between this and lithops code and icechunk-nasa code 🤔
 def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dict] = None):
     storage = icechunk.s3_storage(
@@ -50,11 +51,7 @@ def get_last_timestep(session: icechunk.Session):
     dt_array = np.array([epoch + timedelta(seconds=int(t)) for t in zarr_store['time'][:]])
     return dt_array[-1]
 
-def write_to_icechunk(repo: icechunk.Repository, start_date: str, end_date: str, granule_ur: str):
-    print("searching for granules")
-    granule_results = earthaccess.search_data(
-        temporal=(start_date, end_date), short_name=collection_short_name
-    )
+def write_to_icechunk(repo: icechunk.Repository, granule_results: list[DataGranule], start_date: str, end_date: str):
     print("opening virtual dataset")
     vds = earthaccess.open_virtual_mfdataset(
         granule_results,
@@ -69,12 +66,16 @@ def write_to_icechunk(repo: icechunk.Repository, start_date: str, end_date: str,
     # write to the icechunk store
     vds = vds.drop_vars(drop_vars, errors="ignore")
     print("writing to icechunk")
-    session = repo.writable_session(branch="main")
-    vds.virtualize.to_icechunk(session.store, append_dim='time')
-    print("committing")
-    return session.commit(f"Committed data for {start_date} to {end_date} using {granule_ur}")
+    commit_message = f"Committed data for {start_date} to {end_date}."
+    if os.environ.get("DRY_RUN", "false") == "true":
+        print(f"Dry run, skipping write to icechunk: {commit_message}")
+        return commit_message
+    else:
+        session = repo.writable_session(branch="main")
+        vds.virtualize.to_icechunk(session.store, append_dim='time')
+        return session.commit(commit_message)
 
-def write_to_icechunk_or_fail(granule_cmr_url: str):
+def write_to_icechunk_or_fail():
     print("logging in")
     earthaccess.login()
     print("getting s3 credentials")
@@ -84,26 +85,19 @@ def write_to_icechunk_or_fail(granule_cmr_url: str):
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
     print("getting last timestep")
     session = repo.readonly_session(branch="main")
-    last_timestep = get_last_timestep(session)
-    print("getting granule data")
-    granule_data = requests.get(granule_cmr_url).json()
-    # the beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.
-    granule_end_date_str = granule_data['TemporalExtent']['RangeDateTime']['EndingDateTime']
-    granule_end_date = datetime.date(datetime.strptime(granule_end_date_str, '%Y-%m-%dT%H:%M:%S.%fZ'))
-    # check if the granule is at leastone day greater than the last timestep
-    one_day_later = last_timestep.date() + timedelta(days=1)
-    if granule_end_date >= one_day_later:
-        # write to the icechunk store
-        return write_to_icechunk(
-            repo,
-            str(one_day_later) + " 09:00:00",
-            str(granule_end_date) + " 09:00:00",
-            granule_data['GranuleUR']
-        )
-    else:
-        # fail
-        print(f"Granule {granule_cmr_url} end date {granule_end_date} is not greater than the last timestep {last_timestep}")
+    last_timestep = str(get_last_timestep(session)) + " 09:00:00"
+    print("Searching for granules")
+    current_date = str(datetime.now().date()) + " 09:00:00"
+    # In CMR, granules have a beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.            
+    granule_results = earthaccess.search_data(
+        temporal=(last_timestep, current_date), short_name=collection_short_name
+    )
+    if len(granule_results) == 0:
+        print("No granules found")
         return None
+    else:
+        # write to the icechunk store
+        return write_to_icechunk(repo, granule_results)
 
 def get_secret():
     secret_name = os.environ['SECRET_ARN']
@@ -140,72 +134,9 @@ def lambda_handler(event, context: dict = {}):
     s3 = boto3.client('s3')
     bucket_name = os.environ['S3_BUCKET_NAME']
 
-    try:
-        # Process each record in the event
-        for record in event['Records']:
-            # Extract message body
-            message_body = json.loads(record['body'])
-            print(f"Processing message: {json.dumps(message_body)}")
+    write_to_icechunk_or_fail()
 
-            # Extract relevant information
-            # example message body:
-            # {
-            #     "Type" : "Notification",
-            #     "MessageId" : "fbdb230e-befe-56a6-99ff-7cbe3f7e74ec",
-            #     "TopicArn" : "<CMR Topic ARN>",
-            #     "Subject" : "Update Notification",
-            #     "Message" : "{\"concept-id\": \"G1200463969-CMR_ONLY\", \"granule-ur\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01\", \"producer-granule-id\": \"SWOT_L2_HR_PIXC_578_020_221R_20230710T223456_20230710T223506_PIA1_01.nc\", \"location\": \"https://cmr.earthdata.nasa.gov/search/concepts/G1200463969-CMR_ONLY/16\"}",
-            #     "Timestamp" : "2024-11-14T22:52:48.010Z",
-            #     "SignatureVersion" : "1",
-            #     "Signature" : "VElbKqyRuWNDgI/GB...rjTP+yhjyzdWLomsGA==",
-            #     "SigningCertURL" : "https://sns.<region>.amazonaws.com/SimpleNotificationService-9c6465fa...1136.pem",
-            #     "UnsubscribeURL" : "https://sns.<region>.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=<Subscription ARN>",
-            #     "MessageAttributes" : {
-            #         "collection-concept-id" : {"Type":"String","Value":"C1200463968-CMR_ONLY"},
-            #         "mode" : {"Type":"String","Value":"Update"}
-            #     }
-            # }
-            message = json.loads(message_body.get('Message'))
-
-            # Create a timestamp for the filename
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-
-            # Create S3 key for storing the message
-            s3_key = f"cmr-notifications/{message_body.get('MessageId')}_{timestamp}.json"
-
-            # Store the message in S3
-            s3.put_object(
-                Bucket=bucket_name,
-                Key=s3_key,
-                Body=json.dumps(message_body),
-                ContentType='application/json'
-            )
-
-            print(f"Stored message in S3: {s3_key}")
-
-            # next I would want to check if the date is the next datetime for the collection
-            # example mur sst granule URL: https://cmr.earthdata.nasa.gov/search/concepts/G3507162174-POCLOUD
-            try:
-                granule_cmr_url = message.get('location')
-                write_to_icechunk_or_fail(granule_cmr_url)
-            except Exception as e:
-                print(f"Error writing to icechunk: {e}")
-                s3_key = f"cmr-notifications/errors/{message_body.get('MessageId')}_{timestamp}.json"
-                # write error to s3
-                s3.put_object(
-                    Bucket=bucket_name,
-                    Key=s3_key,
-                    Body=json.dumps(e),
-                    ContentType='application/json'
-                )
-                raise
-
-
-        return {
-            'statusCode': 200,
-            'body': json.dumps('Successfully processed messages')
-        }
-
-    except Exception as e:
-        print(f"Error processing messages: {str(e)}")
-        raise
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Successfully processed messages')
+    }
