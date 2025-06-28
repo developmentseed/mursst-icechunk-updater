@@ -76,14 +76,13 @@ def write_to_icechunk(repo: icechunk.Repository, granule_results: list[DataGranu
         return session.commit(commit_message)
 
 def write_to_icechunk_or_fail():
-    print("logging in")
+    print("earthaccess.login()")
     earthaccess.login()
-    print("getting s3 credentials")
+    print("earthaccess.get_s3_credentials")
     ea_creds = earthaccess.get_s3_credentials(daac='PODAAC')
     print("opening icechunk repo")
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
-    print("getting last timestep")
     session = repo.readonly_session(branch="main")
     # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00, e.g. granule 20240627090000 has datetime range of 2024-06-26 21:00:00:00 to 2024-06-27 21:00:00:00
     # so granules overlap in time. 
@@ -98,6 +97,7 @@ def write_to_icechunk_or_fail():
         print("No granules found")
         return None
     else:
+        print(f"Number of granules found: {len(granule_results)}")
         # write to the icechunk store
         return write_to_icechunk(repo, granule_results, start_date=last_timestep, end_date=current_date)
 
