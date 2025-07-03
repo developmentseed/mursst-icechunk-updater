@@ -50,8 +50,8 @@ class MursstStack(Stack):
             environment={
                 "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"  # Replace with your secret ARN
             },
-            timeout=Duration.seconds(30),
-            memory_size=2048
+            timeout=Duration.seconds(600),
+            memory_size=10240
         )
 
         # Create SNS topic for notifications
