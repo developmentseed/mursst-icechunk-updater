@@ -43,7 +43,7 @@ def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dic
         repo_config['virtual_chunk_credentials'] = earthdata_credentials
     return icechunk.Repository.open(**repo_config)
 
-def get_last_timestep(session: icechunk.Session):
+def get_last_timestep(session: icechunk.Session) -> datetime:
     # get the last timestep from the icechunk store
     # return the last timestep
     zarr_store = zarr.open(session.store, mode="r")
@@ -84,11 +84,12 @@ def write_to_icechunk_or_fail():
     # check date is next datetime for the icechunk store or fail
     repo = open_icechunk_repo(bucket, store_name, ea_creds)
     session = repo.readonly_session(branch="main")
-    last_timestep = str(get_last_timestep(session)) + " 09:00:00"
-    print(f"Last timestep in icechunk store: {last_timestep}")
-    print("Searching for granules...")
-    current_date = str(datetime.now().date()) + " 09:00:00"
-    # In CMR, granules have a beginning and ending datetime have a time of 21:00:00 (e.g. 2024-09-02T21:00:00.000Z to 2024-09-03T21:00:00.000Z) but when you open the data the datetime with a time of 09:00 hours on the same date as the EndingDateTime. which corresponds to the filename. So I think it is appropriate to normalize the search to 09:00 on the date of the EndingDateTime.            
+    # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00, e.g. granule 20240627090000 has datetime range of 2024-06-26 21:00:00:00 to 2024-06-27 21:00:00:00
+    # so granules overlap in time. 
+    # Here we increment the latest timestep of the icechunkstore by 1 minute to make sure we only get granules outside of the latest date covered by the icechunk store
+    last_timestep = str(get_last_timestep(session)) + " 21:00:01"
+    print("Searching for granules")
+    current_date = str(datetime.now().date()) + " 21:00:00"
     granule_results = earthaccess.search_data(
         temporal=(last_timestep, current_date), short_name=collection_short_name
     )
@@ -122,8 +123,7 @@ def get_secret():
 
 def lambda_handler(event, context: dict = {}):
     """
-    Process messages from SQS queue containing CMR notifications.
-    Each message contains information about new or updated granules.
+    Update the icechunk store with the latest MUR-JPL-L4-GLOB-v4.1 data.
     """
     # Fetch secrets
     secrets = get_secret()
@@ -131,13 +131,9 @@ def lambda_handler(event, context: dict = {}):
     os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
     print(f"Received event: {json.dumps(event)}")
 
-    # Initialize S3 client for storing processed messages
-    s3 = boto3.client('s3')
-    bucket_name = os.environ['S3_BUCKET_NAME']
-
-    write_to_icechunk_or_fail()
+    result = write_to_icechunk_or_fail()
 
     return {
         'statusCode': 200,
-        'body': json.dumps('Successfully processed messages')
+        'body': json.dumps(f'Successfully processed messages: {result}')
     }
