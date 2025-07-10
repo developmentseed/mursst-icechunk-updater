@@ -17,12 +17,38 @@ store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
 drop_vars = ["dt_1km_data", "sst_anomaly"]
 collection_short_name = "MUR-JPL-L4-GLOB-v4.1"
 
+# refreshable earthdata credentials
+from typing import Dict
+
+def get_earthdata_creds() -> Dict[str, str]:
+    # assumes that username and password are available in the environment
+    # TODO: accomodate rc file?
+    auth = earthaccess.login(strategy='environment') # this does not create a netrc file...
+    if not auth.authenticated:
+        raise PermissionError('Could not authenticate using environment variables')
+    else:
+        print
+    creds = auth.get_s3_credentials(daac='PODAAC')
+    return creds
+
+from icechunk import S3StaticCredentials
+def get_icechunk_creds() -> S3StaticCredentials:
+    creds = get_earthdata_creds()
+    return S3StaticCredentials(
+        access_key_id=creds['accessKeyId'],
+        secret_access_key=creds['secretAccessKey'],
+        expires_after=datetime.fromisoformat(creds['expiration']),
+        session_token=creds['sessionToken']
+    )
+
 # 🍱 there is a lot of overlap between this and lithops code and icechunk-nasa code 🤔
 def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dict] = None):
     storage = icechunk.s3_storage(
         bucket=bucket_name,
         prefix=f"icechunk/{store_name}",
-        anonymous=False
+        anonymous=False,
+        from_env=True # cannot auth with EDL
+        # get_credentials=get_icechunk_creds,
     )
 
     config = icechunk.RepositoryConfig.default()
@@ -32,15 +58,13 @@ def open_icechunk_repo(bucket_name: str, store_name: str, ea_creds: Optional[dic
         storage=storage,
         config=config,
     )
+    
     if ea_creds:
         earthdata_credentials = icechunk.containers_credentials(
-            s3=icechunk.s3_credentials(
-                access_key_id=ea_creds['accessKeyId'],
-                secret_access_key=ea_creds['secretAccessKey'],
-                session_token=ea_creds['sessionToken']
-            )
+            s3=icechunk.s3_refreshable_credentials(get_credentials=get_icechunk_creds),
         )
         repo_config['virtual_chunk_credentials'] = earthdata_credentials
+    print('repo_config', repo_config)
     return icechunk.Repository.open(**repo_config)
 
 def get_last_timestep(session: icechunk.Session) -> datetime:
@@ -125,10 +149,11 @@ def lambda_handler(event, context: dict = {}):
     """
     Update the icechunk store with the latest MUR-JPL-L4-GLOB-v4.1 data.
     """
+    # Reactivate this! For now testing with manual injection
     # Fetch secrets
-    secrets = get_secret()
-    os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
-    os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
+    # secrets = get_secret()
+    # os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
+    # os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
     print(f"Received event: {json.dumps(event)}")
 
     result = write_to_icechunk_or_fail()
