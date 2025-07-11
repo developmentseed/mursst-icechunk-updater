@@ -66,8 +66,7 @@ def open_icechunk_repo(bucket_name: str, store_name: str):
         bucket=bucket_name,
         prefix=f"icechunk/{store_name}",
         anonymous=False,
-        from_env=True # cannot auth with EDL
-        # get_credentials=get_icechunk_creds,
+        from_env=True
     )
 
     config = icechunk.RepositoryConfig.default()
@@ -158,9 +157,7 @@ def test_store_on_branch(
         direct_access_links = [granule.data_links(access="direct")[0] for granule in granule_results]
         fileset = earthaccess.open(direct_access_links, provider='POCLOUD')
         ds_original = xr.open_mfdataset(fileset).drop_vars(drop_vars, errors="ignore")
-        # xr.testing.assert_allclose(ds_original, ds.isel(time=slice(-nt, None)))
-        # for testing - TODO: Reset
-        xr.testing.assert_allclose(ds_original.isel(time=-1).mean(), ds.isel(time=-1).mean())
+        xr.testing.assert_allclose(ds_original, ds.isel(time=slice(-nt, None)))
         data_equal = True
     except AssertionError as e:
         data_equal = False
