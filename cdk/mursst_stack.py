@@ -48,10 +48,11 @@ class MursstStack(Stack):
             ),
             role=lambda_role,
             environment={
-                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"  # Replace with your secret ARN
+                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",  # Replace with your secret ARN
+                "DRY_RUN": "true", # Deactivate write for now
             },
             timeout=Duration.seconds(600),
-            memory_size=10240
+            memory_size=1024
         )
 
         # Create SNS topic for notifications
