@@ -48,7 +48,7 @@ def get_icechunk_creds(daac:str=None) -> S3StaticCredentials:
         # https://github.com/nsidc/earthaccess/discussions/1051 could help here.
     # assumes that username and password are available in the environment
     # TODO: accomodate rc file?
-    auth = earthaccess.login(strategy='environment') # this does not create a netrc file...
+    auth = earthaccess.login(strategy='environment')
     if not auth.authenticated:
         raise PermissionError('Could not authenticate using environment variables')
     creds = auth.get_s3_credentials(daac=daac)
@@ -238,10 +238,14 @@ def lambda_handler(event, context: dict = {}):
     Update the icechunk store with the latest MUR-JPL-L4-GLOB-v4.1 data.
     """
 
-    #Fetch secrets 
-    secrets = get_secret()
-    os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
-    os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
+    #Fetch secrets (if EDL env vars are not set, this enables easier local testing)
+    if os.environ.get('LOCAL_TEST', False):
+        print('LOCAL TEST detected. You need to set EDL login/password manually')
+    else:
+        secrets = get_secret()
+        os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
+        os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
+    
     
     print(f"Received event: {json.dumps(event)}")
 
