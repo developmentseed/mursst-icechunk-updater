@@ -238,10 +238,12 @@ def lambda_handler(event, context: dict = {}):
     Update the icechunk store with the latest MUR-JPL-L4-GLOB-v4.1 data.
     """
 
-    #Fetch secrets
-    secrets = get_secret()
-    os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
-    os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
+    #Fetch secrets (if EDL env vars are not set, this enables easier local testing)
+    if os.environ.get('EARTHDATA_USERNAME', None):
+        secrets = get_secret()
+        os.environ['EARTHDATA_USERNAME'] = secrets['EARTHDATA_USERNAME']
+        os.environ['EARTHDATA_PASSWORD'] = secrets['EARTHDATA_PASSWORD']
+    
     print(f"Received event: {json.dumps(event)}")
 
     result = write_to_icechunk_or_fail()

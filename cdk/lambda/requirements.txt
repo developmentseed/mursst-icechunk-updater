@@ -3,4 +3,4 @@ earthaccess>=0.13.0
 icechunk>=0.2.0,<1.0.0
 zarr>=3.0.0
 requests>=2.25.0
-virtualizarr>=1.3.0,<2.0.0
+virtualizarr==1.3.2
