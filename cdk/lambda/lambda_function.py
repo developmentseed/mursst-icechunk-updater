@@ -143,7 +143,7 @@ def test_store_on_branch(
     nt = len(granule_results)
 
     print("Building Test Datasets")
-    direct_access_links = [granule.data_links(access="direct", in_region=True)[0] for granule in granule_results]
+    direct_access_links = [granule.data_links(access="external")[0] for granule in granule_results]
     fileset = earthaccess.open(direct_access_links, provider='POCLOUD')
     ds_original = xr.open_mfdataset(fileset).drop_vars(drop_vars, errors="ignore")
     
