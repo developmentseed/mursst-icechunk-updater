@@ -138,10 +138,17 @@ def test_store_on_branch(
     repo: icechunk.Repository,
     granule_results: list[DataGranule]
 ):
+    print("Starting Tests")
     ds = open_xr_dataset_from_branch(repo, branchname)
     nt = len(granule_results)
+
+    print("Building Test Datasets")
+    direct_access_links = [granule.data_links(access="external")[0] for granule in granule_results]
+    fileset = earthaccess.open(direct_access_links, provider='POCLOUD')
+    ds_original = xr.open_mfdataset(fileset).drop_vars(drop_vars, errors="ignore")
     
     # Test 1: time continuity
+    print("Testing Time continuity")
     try:
         dt_expected = ds.time.isel(time=slice(0, 1)).diff('time')
         dt_actual = ds.time.isel(time=slice(-nt+1, None)).diff('time')
@@ -153,10 +160,8 @@ def test_store_on_branch(
         time_continuity_error = None
 
     # Test 2: data equality
+    print("Testing Data equality")
     try:
-        direct_access_links = [granule.data_links(access="direct")[0] for granule in granule_results]
-        fileset = earthaccess.open(direct_access_links, provider='POCLOUD')
-        ds_original = xr.open_mfdataset(fileset).drop_vars(drop_vars, errors="ignore")
         xr.testing.assert_allclose(ds_original, ds.isel(time=slice(-nt, None)))
         data_equal = True
     except AssertionError as e:
@@ -223,7 +228,7 @@ def write_to_icechunk_or_fail():
         write_to_icechunk_branch(repo, granule_results)
         passed, message = test_store_on_branch(repo, granule_results)
         if not passed:
-            print('Tests did not pass with: {message}')
+            print(f'Tests did not pass with: {message}')
             return message
         else:
             print('Tests passed. Merging new data into main branch.')
