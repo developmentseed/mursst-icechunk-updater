@@ -125,7 +125,7 @@ def write_to_icechunk_branch(repo: icechunk.Repository, granule_results: list[Da
     vds.virtualize.to_icechunk(session.store, append_dim='time')
 
     snapshot = session.commit(commit_message)
-    print(f"Commit successful. {snapshot} | {commit_message}")
+    print(f"Commit successful to branch: {branchname} as snapshot:{snapshot} \n {commit_message}")
     return snapshot
 
 def open_xr_dataset_from_branch(repo:icechunk.Repository,branch:str):
@@ -192,8 +192,10 @@ def merge_into_main(repo: icechunk.Repository):
     if os.environ.get("DRY_RUN", "false") == "true":
         print(f"Dry run, not merging {branchname} into main")
     else:
+        print(f"merging {branchname} into main")
         # append branch commit to main branch and delete test branch
-        repo.reset_branch('main', repo.lookup_branch(branchname))
+        snapshot = repo.reset_branch('main', repo.lookup_branch(branchname))
+        print(f"Latest snapshot on main: {snapshot}")
     # always delete extra branch
     #TODO: The hub does not allow us to delete objects!
     # repo.delete_branch(branchname)  
@@ -206,8 +208,8 @@ def find_granules(repo: icechunk.Repository):
     # Here we increment the latest timestep of the icechunkstore by 1 minute 
     # to make sure we only get granules outside of the latest date covered by the icechunk store
     last_timestep = str(get_last_timestep(session)) + " 21:00:01"
-    print("Searching for granules")
     current_date = str(datetime.now().date()) + " 21:00:00"
+    print(f"Searching for granules between {last_timestep} and {current_date}")
     granule_results = earthaccess.search_data(
         temporal=(last_timestep, current_date), short_name=collection_short_name
     )
@@ -231,7 +233,7 @@ def write_to_icechunk_or_fail():
             print(f'Tests did not pass with: {message}')
             return message
         else:
-            print('Tests passed. Merging new data into main branch.')
+            print('Tests passed.')
             merge_into_main(repo)
             return repo.lookup_branch('main')
     else:
