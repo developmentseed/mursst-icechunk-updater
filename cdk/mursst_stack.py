@@ -1,5 +1,6 @@
 from aws_cdk import (
     Stack,
+    Tags,
     aws_lambda as _lambda,
     aws_iam as iam,
     aws_s3 as s3,
@@ -54,6 +55,11 @@ class MursstStack(Stack):
             timeout=Duration.seconds(600),
             memory_size=1024
         )
+
+        # Add tags for easier cost tracking
+        Tags.of(lambda_function).add("Project", "MURSST-Icechunk-Updater")
+        Tags.of(lambda_function).add("Team", "ODD")
+        Tags.of(lambda_function).add("Owner", "jbusecke")
 
         # Create SNS topic for notifications
         notification_topic = sns.Topic(
