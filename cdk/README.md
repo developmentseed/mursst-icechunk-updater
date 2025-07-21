@@ -67,3 +67,21 @@ $ cdk deploy
 
 The infrastructure can be configured through environment variables and CDK context. See the `app.py` file for available configuration options.
 
+## Development
+Running the notebooks on the veda hub is not as easy as https://docs.astral.sh/uv/guides/integration/jupyter/#using-jupyter-with-a-non-project-environment, but if you are running from an image that has uv installed you can do this in a cell:
+
+```
+!uv export --format=requirements.txt --no-hashes --no-annotate --no-header > temp_requirements
+```
+and then
+```
+!uv pip install -r temp_requirements
+```
+
+
+
+To run the notebooks on the veda hub use:
+
+```
+uv venv
+```

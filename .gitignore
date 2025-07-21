@@ -13,3 +13,4 @@ cdk.out
 queue_arn.txt
 config.py
 *.ipynb_checkpoints/
+cdk/lambda/temp_requirements
