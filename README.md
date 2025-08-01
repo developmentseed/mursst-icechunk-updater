@@ -58,3 +58,16 @@ Note also that the `name` of the subscription will be `<SUBSCRIBER_ID>-<COLLECTI
 
 See `cdk/README.md`.
 
+## Using uv with jupyter lab
+```
+uv sync
+uv run bash
+python -m ipykernel install --user --name=mursstvenv --display-name="MURSST-VENV"
+```
+After refreshing your browser window you should be able to select the "
+
+## Running tests
+
+```
+uv run pytest
+```

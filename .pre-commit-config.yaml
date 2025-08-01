@@ -16,3 +16,17 @@ repos:
         files: '(pyproject\.toml|uv\.lock)$'
         pass_filenames: false
         stages: ['post-commit']
+
+repos:
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.8.4
+    hooks:
+      - id: uv-lock
+
+# - repo: https://github.com/astral-sh/uv-pre-commit
+#   # uv version.
+#   rev: 0.8.4
+#   hooks:
+#     - id: uv-export
+#       args: ["--format=requirements.txt","--no-hashes","--no-annotate","--no-header","--frozen","--output-file=cdk/lambda/requirements.txt"]

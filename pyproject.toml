@@ -10,15 +10,32 @@ dependencies = [
     "earthaccess>=0.13.0",
     "h5netcdf>=1.6.3",
     "icechunk>=1.0.0",
+    "lithops>=3.6.1",
     "requests>=2.25.0",
-    "virtualizarr",
+    "virtualizarr==2.0.0",
     "zarr>=3.1.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.30.0",
+    "pre-commit>=4.2.0",
+    "pytest>=8.4.1",
+    "pytest-xdist>=3.8.0",
 ]
 
-[tool.uv.sources]
-virtualizarr = { git = "https://github.com/zarr-developers/VirtualiZarr.git", rev = "2e0b22822b51f1a9c8cbe08c791289e1fce895c3" }
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "cdk/lambda"}
+
+[tool.setuptools.packages.find]
+where = ["cdk/lambda"]
+
+[tool.pytest.ini_options]
+addopts = "-n auto -ra"
+testpaths = [
+    "tests"
+]
