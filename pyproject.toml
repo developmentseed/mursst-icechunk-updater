@@ -35,7 +35,7 @@ package-dir = {"" = "cdk/lambda"}
 where = ["cdk/lambda"]
 
 [tool.pytest.ini_options]
-addopts = "-n auto -ra"
+addopts = "-vv -n 1 -ra" #I havent figured out how to run them in parallel. Something with lithops temp files always fails.
 testpaths = [
     "tests"
 ]

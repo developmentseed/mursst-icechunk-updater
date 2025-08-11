@@ -1,6 +1,6 @@
 # CMR Notification Processing
 
-This CDK project deploys a Lambda function that processes notifications from NASA's Common Metadata Repository (CMR) via an SQS queue. The infrastructure is designed to handle subscription notifications from CMR and process them accordingly.
+This CDK project deploys a Lambda function that will update a virtual icechunk store at fixed time intervals.
 
 ## Prerequisites
 
@@ -8,6 +8,10 @@ This CDK project deploys a Lambda function that processes notifications from NAS
 - Python 3.x
 - AWS credentials configured
 - Access to the target AWS account and region
+
+## Set up temporary local AWS credentials using MFA
+
+This is still a WIP. See [this document for some solutions](https://hackmd.io/5JZ0beEKQ3mI5GUAQuGbBA).
 
 ## Setup
 
@@ -26,9 +30,8 @@ $ uv pip install -r requirements.txt
 
 ## Infrastructure Components
 
-- **SQS Queue**: Receives notifications from CMR subscription
 - **Lambda Function**: Processes the notifications from the SQS queue
-- **IAM Roles**: Provides necessary permissions for the Lambda to access SQS and other required AWS services
+- **IAM Roles**: Provides necessary permissions for the Lambda to access required AWS services
 
 ## Deployment
 
@@ -66,22 +69,3 @@ $ cdk deploy
 ## Configuration
 
 The infrastructure can be configured through environment variables and CDK context. See the `app.py` file for available configuration options.
-
-## Development
-Running the notebooks on the veda hub is not as easy as https://docs.astral.sh/uv/guides/integration/jupyter/#using-jupyter-with-a-non-project-environment, but if you are running from an image that has uv installed you can do this in a cell:
-
-```
-!uv export --format=requirements.txt --no-hashes --no-annotate --no-header > temp_requirements
-```
-and then
-```
-!uv pip install -r temp_requirements
-```
-
-
-
-To run the notebooks on the veda hub use:
-
-```
-uv venv
-```

@@ -23,10 +23,14 @@ repos:
     rev: 0.8.4
     hooks:
       - id: uv-lock
-
-# - repo: https://github.com/astral-sh/uv-pre-commit
-#   # uv version.
-#   rev: 0.8.4
-#   hooks:
-#     - id: uv-export
-#       args: ["--format=requirements.txt","--no-hashes","--no-annotate","--no-header","--frozen","--output-file=cdk/lambda/requirements.txt"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.12.7
+    hooks:
+      # Run the linter.
+      - id: ruff
+        types_or: [ python, pyi ]
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [ python, pyi ]
