@@ -198,7 +198,13 @@ def dataset_from_search(
     if len(granule_results) == 0:
         raise ValueError("No new data granules available")
 
-    direct_access_urls = [g.data_links(access="direct")[0] for g in granule_results]
+    out_of_region = os.environ.get("OUT_OF_REGION", False)
+    print(f"{out_of_region=}")
+    if out_of_region:
+        print("Using external data links.")
+        data_urls = [g.data_links(access="external")[0] for g in granule_results]
+    else:
+        data_urls = [g.data_links(access="direct")[0] for g in granule_results]
 
     store, registry = obstore_and_registry_from_url(example_target_url)
     parser = HDFParser()
@@ -208,7 +214,7 @@ def dataset_from_search(
 
     if virtual:
         return open_virtual_mfdataset(
-            direct_access_urls,
+            data_urls,
             registry=registry,
             parser=parser,
             # decode_timedelta=True, # does not work yet (see https://github.com/zarr-developers/VirtualiZarr/issues/749#issuecomment-3140247475)
@@ -217,10 +223,10 @@ def dataset_from_search(
         )
     else:
         # # Old code, maybe that is not necessary
-        # direct_access_urls = [
+        # data_urls = [
         #     granule.data_links(access="external")[0] for granule in granule_results
         # ]
-        fileset = earthaccess.open(direct_access_urls, provider="POCLOUD")
+        fileset = earthaccess.open(data_urls, provider="POCLOUD")
         return xr.open_mfdataset(
             fileset,
             preprocess=preprocess,
