@@ -202,7 +202,9 @@ def dataset_from_search(
     print(f"{out_of_region=}")
     if out_of_region:
         print("Using external data links.")
-        data_urls = [g.data_links(access="external")[0] for g in granule_results]
+        data_urls = [
+            g.data_links(access="external", in_region=False)[0] for g in granule_results
+        ]
     else:
         data_urls = [g.data_links(access="direct")[0] for g in granule_results]
 
