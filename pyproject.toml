@@ -7,11 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.38.46",
     "dask>=2025.7.0",
-    "dotenv>=0.9.9",
     "earthaccess>=0.13.0",
     "h5netcdf>=1.6.3",
     "icechunk>=1.0.0",
-    "lithops>=3.6.1",
     "requests>=2.25.0",
     "virtualizarr==2.0.0",
     "zarr>=3.1.0",
@@ -22,6 +20,8 @@ dev = [
     "ipykernel>=6.30.0",
     "pre-commit>=4.2.0",
     "pytest>=8.4.1",
+    "dotenv>=0.9.9",
+    "lithops>=3.6.1",
 ]
 
 [build-system]
@@ -35,7 +35,7 @@ package-dir = {"" = "cdk/lambda"}
 where = ["cdk/lambda"]
 
 [tool.pytest.ini_options]
-addopts = "-vv -n 1 -ra" #I havent figured out how to run them in parallel. Something with lithops temp files always fails.
+addopts = "-vv"
 testpaths = [
     "tests"
 ]

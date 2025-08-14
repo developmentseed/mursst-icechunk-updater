@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -943,11 +943,9 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "dask" },
-    { name = "dotenv" },
     { name = "earthaccess" },
     { name = "h5netcdf" },
     { name = "icechunk" },
-    { name = "lithops" },
     { name = "requests" },
     { name = "virtualizarr" },
     { name = "zarr" },
@@ -955,7 +953,9 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "dotenv" },
     { name = "ipykernel" },
+    { name = "lithops" },
     { name = "pre-commit" },
     { name = "pytest" },
 ]
@@ -964,11 +964,9 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.38.46" },
     { name = "dask", specifier = ">=2025.7.0" },
-    { name = "dotenv", specifier = ">=0.9.9" },
     { name = "earthaccess", specifier = ">=0.13.0" },
     { name = "h5netcdf", specifier = ">=1.6.3" },
     { name = "icechunk", specifier = ">=1.0.0" },
-    { name = "lithops", specifier = ">=3.6.1" },
     { name = "requests", specifier = ">=2.25.0" },
     { name = "virtualizarr", specifier = "==2.0.0" },
     { name = "zarr", specifier = ">=3.1.0" },
@@ -976,7 +974,9 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "dotenv", specifier = ">=0.9.9" },
     { name = "ipykernel", specifier = ">=6.30.0" },
+    { name = "lithops", specifier = ">=3.6.1" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.4.1" },
 ]
