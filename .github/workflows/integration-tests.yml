@@ -25,4 +25,4 @@ jobs:
         run: pip install uv
 
       - name: Run pytest
-        run: uv run pytest
+        run: uv run pytest --ignore=test_integration_in_region.py

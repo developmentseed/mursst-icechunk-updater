@@ -56,6 +56,7 @@ class MursstStack(Stack):
             environment={
                 "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",  # Replace with your secret ARN
                 # "DRY_RUN": "true", # Deactivate write for now
+                "ICECHUNK_STORE_DIRECT": "s3://nasa-veda-scratch/jbusecke/icechunk/mursst-testing/MUR_test_deployed",
             },
             timeout=Duration.seconds(600),
             memory_size=1024,

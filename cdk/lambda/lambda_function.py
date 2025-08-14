@@ -19,11 +19,6 @@ from virtualizarr.registry import ObjectStoreRegistry
 from obstore.store import S3Store
 from icechunk import S3StaticCredentials
 
-
-# bucket = "nasa-eodc-public"
-# store_name = "MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
-
-store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v1-p2"
 collection_short_name = "MUR-JPL-L4-GLOB-v4.1"
 drop_vars = ["dt_1km_data", "sst_anomaly"]
 # TODO can I name this based on some id for the lambda?
@@ -107,8 +102,6 @@ def get_icechunk_creds(daac: str = None) -> S3StaticCredentials:
 
 
 # +++ Icechunk Wrangling +++
-
-
 def get_icechunk_storage(target: str) -> icechunk.Storage:
     if target.startswith("s3://"):
         print("Defining icechunk storage for s3")
@@ -191,22 +184,14 @@ def dataset_from_search(
     virtual=True,
     limit_granules: int = None,
     parallel="lithops",
+    access: str = "direct",
 ) -> xr.Dataset:
     print(f"{limit_granules=}")
     granule_results = find_granules(start_date, end_date, limit_granules=limit_granules)
-    print(f"DEBUG: {granule_results=}")
     if len(granule_results) == 0:
         raise ValueError("No new data granules available")
 
-    out_of_region = os.environ.get("OUT_OF_REGION", False)
-    print(f"{out_of_region=}")
-    if out_of_region:
-        print("Using external data links.")
-        data_urls = [
-            g.data_links(access="external", in_region=False)[0] for g in granule_results
-        ]
-    else:
-        data_urls = [g.data_links(access="direct")[0] for g in granule_results]
+    data_urls = [g.data_links(access=access)[0] for g in granule_results]
 
     store, registry = obstore_and_registry_from_url(example_target_url)
     parser = HDFParser()
@@ -224,10 +209,6 @@ def dataset_from_search(
             parallel=parallel,
         )
     else:
-        # # Old code, maybe that is not necessary
-        # data_urls = [
-        #     granule.data_links(access="external")[0] for granule in granule_results
-        # ]
         fileset = earthaccess.open(data_urls, provider="POCLOUD")
         return xr.open_mfdataset(
             fileset,
@@ -334,7 +315,7 @@ def write_to_icechunk_or_fail(
         print(f"writing to icechunk branch {branchname}")
         commit_message = f"MUR update {branchname}"
         session = repo.writable_session(branch=branchname)
-        vds.virtualize.to_icechunk(session.store, append_dim="time")
+        vds.vz.to_icechunk(session.store, append_dim="time")
         snapshot = session.commit(commit_message)
         print(
             f"Commit successful to branch: {branchname} as snapshot:{snapshot} \n {commit_message}"
@@ -367,7 +348,6 @@ def write_to_icechunk_or_fail(
                 print(f"Latest snapshot on main: {snapshot}")
             return "Success"
     except Exception as e:
-        print(f"DEBUG: {e=}")
         return e.args[0]
 
 
@@ -386,10 +366,8 @@ def lambda_handler(event, context: dict = {}):
 
     print(f"Received event: {json.dumps(event)}")
     # this is for the final test (needs to be created by a local script)
-    store_url = (
-        "s3://nasa-veda-scratch/jbusecke/icechunk/mursst-testing/MUR_test_deployed"
-    )
-    result = write_to_icechunk_or_fail(store_url)
+    store_url = os.environ["ICECHUNK_STORE_DIRECT"]
+    result = write_to_icechunk_or_fail(store_url, parallel=False)
 
     return {
         "statusCode": 200,
