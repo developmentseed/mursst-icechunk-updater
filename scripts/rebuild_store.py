@@ -11,14 +11,16 @@ from lambda_function import (
     open_icechunk_repo,
     dataset_from_search,
 )
+
+# # Rebuilding production store
+# store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
+
+# normal testing
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
-# Rebuilding production store
-store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
-
-# normal testing
-# store_url = os.environ["ICECHUNK_STORE_DIRECT"]
+store_url = os.environ["ICECHUNK_STORE_DIRECT"]
 
 # This script was used to rebuild the icecunk MUR store
 
@@ -30,6 +32,7 @@ end_date = "2025-08-10 21:00:00"
 vds = dataset_from_search(start_date, end_date, virtual=True)
 
 # create empty repo and open it
+print(f"Creating new store at {store_url=}")
 create_icechunk_repo(store_url)
 repo = open_icechunk_repo(store_url)
 
