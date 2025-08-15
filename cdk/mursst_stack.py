@@ -59,7 +59,8 @@ class MursstStack(Stack):
                 "ICECHUNK_STORE_DIRECT": "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2",
             },
             timeout=Duration.seconds(600),
-            memory_size=1024,
+            # memory_size=1024,
+            memory_size=4096,
         )
 
         # Create SNS topic for notifications

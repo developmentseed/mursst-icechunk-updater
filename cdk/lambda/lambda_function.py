@@ -304,12 +304,14 @@ def write_to_icechunk_or_fail(
         )
         print(f"New Data (Virtual): {vds}")
         # write to the icechunk store
+        main_snapshot = repo.lookup_branch(
+                "main"
+            )
+        print(f"Latest main snapshot: {main_snapshot}")
         print(f"Creating branch: {branchname}")
         repo.create_branch(
             branchname,
-            snapshot_id=repo.lookup_branch(
-                "main"
-            ),  # branches of the lates commit to main!
+            snapshot_id=main_snapshot,  # branches of the lates commit to main!
         )
 
         print(f"writing to icechunk branch {branchname}")
