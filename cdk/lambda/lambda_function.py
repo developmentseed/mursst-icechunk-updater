@@ -75,7 +75,7 @@ def obstore_and_registry_from_url(url: str) -> Tuple[S3Store, ObjectStoreRegistr
     parsed = urlparse(url)
     parsed_wo_path = parsed._replace(path="")
     bucket = parsed.netloc
-    print(bucket)
+    print(f"{bucket=}")
     cp = get_obstore_credentials
     store = S3Store(bucket=bucket, region="us-west-2", credential_provider=cp)
     registry = ObjectStoreRegistry({parsed_wo_path.geturl(): store})
