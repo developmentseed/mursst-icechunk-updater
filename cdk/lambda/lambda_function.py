@@ -20,8 +20,17 @@ from virtualizarr.registry import ObjectStoreRegistry
 from obstore.store import S3Store
 from icechunk import S3StaticCredentials
 
-# Configure logging
-logger = logging.getLogger()
+# Configure logging.
+# In AWS Lambda, basicConfig does nothing as a handler is already configured.
+# Locally, this will set the root logger to INFO level.
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+# Get the logger for this module
+logger = logging.getLogger(__name__)
+# Set the level for this specific logger to DEBUG, so it's always verbose.
+# Other loggers (like boto3) will inherit the root logger's level (INFO).
 logger.setLevel(logging.DEBUG)
 
 
@@ -90,6 +99,7 @@ def obstore_and_registry_from_url(url: str) -> Tuple[S3Store, ObjectStoreRegistr
     registry = ObjectStoreRegistry({parsed_wo_path.geturl(): store})
     logger.debug(f"Created ObjectStoreRegistry: {registry}")
     return store, registry
+
 
 # refreshable earthdata credentials
 def get_icechunk_creds(daac: str = None) -> S3StaticCredentials:
@@ -300,9 +310,15 @@ def write_to_icechunk_or_fail(
     # Here we increment the latest timestep of the icechunkstore by 1 minute
     # to make sure we only get granules outside of the latest date covered by the icechunk store
     last_date = get_timestep_from_ds(ds_main, -1).date()
-    last_timestep = datetime.combine(last_date, datetime.strptime("21:00:01", "%H:%M:%S").time(), tzinfo=timezone.utc).isoformat(sep=" ")
+    last_timestep = datetime.combine(
+        last_date, datetime.strptime("21:00:01", "%H:%M:%S").time(), tzinfo=timezone.utc
+    ).isoformat(sep=" ")
     current_date_date = datetime.now(timezone.utc).date()
-    current_date = datetime.combine(current_date_date, datetime.strptime("21:00:00", "%H:%M:%S").time(), tzinfo=timezone.utc).isoformat(sep=" ")
+    current_date = datetime.combine(
+        current_date_date,
+        datetime.strptime("21:00:00", "%H:%M:%S").time(),
+        tzinfo=timezone.utc,
+    ).isoformat(sep=" ")
 
     try:
         ## Search for new data and create a virtual dataset
@@ -315,9 +331,7 @@ def write_to_icechunk_or_fail(
         )
         logger.debug(f"New Data (Virtual): {vds}")
         # write to the icechunk store
-        main_snapshot = repo.lookup_branch(
-                "main"
-            )
+        main_snapshot = repo.lookup_branch("main")
         logger.debug(f"Latest main snapshot: {main_snapshot}")
         logger.info(f"Creating branch: {branchname}")
         repo.create_branch(
@@ -373,9 +387,11 @@ def lambda_handler(event, context: dict = {}):
     try:
         # Fetch secrets (if EDL env vars are not set, this enables easier local testing)
         if os.environ.get("LOCAL_TEST", "false").lower() == "true":
-            logger.debug('LOCAL TEST detected. You need to set EDL login/password manually')
+            logger.debug(
+                "LOCAL TEST detected. You need to set EDL login/password manually"
+            )
         else:
-            logger.debug('Fetching secrets from AWS Secrets Manager')
+            logger.debug("Fetching secrets from AWS Secrets Manager")
             secrets = get_secret()
             os.environ["EARTHDATA_USERNAME"] = secrets["EARTHDATA_USERNAME"]
             os.environ["EARTHDATA_PASSWORD"] = secrets["EARTHDATA_PASSWORD"]
@@ -389,7 +405,7 @@ def lambda_handler(event, context: dict = {}):
             "statusCode": 200,
             "body": json.dumps(f"Successfully processed messages: {result}"),
         }
-    
+
     except Exception as e:
         logger.error(f"Function failed with error: {str(e)}", exc_info=True)
         raise
