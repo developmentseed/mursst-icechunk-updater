@@ -2,6 +2,70 @@
 
 Code for writing to an Icechunk store using CMR subscriptions and other AWS services.
 
+## Example
+
+This snippet shows how to open the store and make a first plot
+
+```python
+import icechunk as ic
+from icechunk.credentials import S3StaticCredentials
+from datetime import datetime
+from urllib.parse import urlparse
+import earthaccess
+import xarray as xr
+
+store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
+store_url_parsed = urlparse(store_url)
+
+storage = ic.s3_storage(
+    bucket = store_url_parsed.netloc,
+    prefix = store_url_parsed.path,
+    from_env=True,
+)
+
+def get_icechunk_creds(daac: str = None) -> S3StaticCredentials:
+    if daac is None:
+        daac = "PODAAC"  # TODO: Might want to change this for a more general version
+        # https://github.com/nsidc/earthaccess/discussions/1051 could help here.
+    # assumes that username and password are available in the environment
+    # TODO: accomodate rc file?
+    auth = earthaccess.login(strategy="environment")
+    if not auth.authenticated:
+        raise PermissionError("Could not authenticate using environment variables")
+    creds = auth.get_s3_credentials(daac=daac)
+    return S3StaticCredentials(
+        access_key_id=creds["accessKeyId"],
+        secret_access_key=creds["secretAccessKey"],
+        expires_after=datetime.fromisoformat(creds["expiration"]),
+        session_token=creds["sessionToken"],
+    )
+
+
+
+# TODO: Is there a way to avoid double opening? Maybe not super important
+repo = ic.Repository.open(
+    storage=storage,
+)
+# see if reopening works
+repo = ic.Repository.open(
+    storage=storage,
+    authorize_virtual_chunk_access = ic.containers_credentials(
+        {
+            k: ic.s3_refreshable_credentials(
+                    get_credentials=get_icechunk_creds
+                ) for k in repo.config.virtual_chunk_containers.keys()
+        }
+    )
+)
+
+session = repo.readonly_session('main')
+ds = xr.open_zarr(session.store, zarr_format=3, consolidated=False)
+ds['analysed_sst'].isel(time=0, lon=slice(10000, 12000), lat=slice(10000, 12000)).plot()
+```
+
+> This has been tested on the NASA VEDA hub only for now.
+
+
 ## Background
 
 https://wiki.earthdata.nasa.gov/display/CMR/CMR+Ingest+Subscriptions
