@@ -25,35 +25,21 @@ To develop and deploy this project, you will need the following tools installed 
 2.  **Set up CDK Virtual Environment**
     This environment is for running the `cdk` commands.
     ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
-    ```
-
-3.  **Set up Lambda Virtual Environment**
-    The Lambda function has its own dependencies. Setting up a virtual environment for it helps with code analysis and running tests.
-    ```bash
-    cd lambda
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
-    cd .. 
+    uv sync
+    uv pip install -r requirements.txt
     ```
 
 ## Local Development and Testing
 
-Running the function locally is crucial for rapid development and debugging. We use the **AWS SAM CLI** to invoke the function in a Docker container that simulates the AWS Lambda environment.
+>[!WARNING] Does not work completely as of yet!!! Need to figure out docker depenency (see below). 
 
-**Set up development environment**
-```bash
-uv sync --group dev
-```
+Running the function locally is crucial for rapid development and debugging. We use the **AWS SAM CLI** to invoke the function in a Docker container that simulates the AWS Lambda environment.
 
 **Step 1: Synthesize the CloudFormation Template**
 
 The SAM CLI needs the compiled CloudFormation template from your CDK app.
 ```bash
-cdk synth
+uv run cdk synth
 ```
 This will create the template at `cdk.out/MursstStack.template.json`.
 
@@ -103,7 +89,7 @@ The function requires several environment variables. Create a file named `env.js
 
 Now you can run the function:
 ```bash
-sam local invoke MursstIcechunkUpdater \
+uv run sam local invoke MursstIcechunkUpdater \
   -t cdk.out/MursstStack.template.json \
   --event events/event.json \
   --env-vars env.json
@@ -111,6 +97,8 @@ sam local invoke MursstIcechunkUpdater \
 This command will build the Docker image if it's the first time and then invoke your function handler. You will see all the logs, including your `DEBUG` messages, printed directly to your terminal.
 
 ### Special instructions for JupyterHUb
+
+**WIP**
 
 - docker
 - 
@@ -128,7 +116,7 @@ To deploy the infrastructure to your AWS account, run the following commands.
 
 2.  **Deploy the Stack**
     ```bash
-    cdk deploy
+    uv run cdk deploy
     ```
 
 ## Useful CDK Commands
