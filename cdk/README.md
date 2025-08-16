@@ -25,7 +25,8 @@ To develop and deploy this project, you will need the following tools installed 
 2.  **Set up CDK Virtual Environment**
     This environment is for running the `cdk` commands.
     ```bash
-    uv sync
+    uv venv .venv
+    source .venv/bin/activate
     uv pip install -r requirements.txt
     ```
 
