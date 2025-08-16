@@ -22,6 +22,8 @@ dev = [
     "pytest>=8.4.1",
     "dotenv>=0.9.9",
     "lithops>=3.6.1",
+    "aws-sam-cli>=1.142.1",
+    "aws-cdk-lib>=2.211.0",
 ]
 notebook = [
     "matplotlib>=3.10.5",

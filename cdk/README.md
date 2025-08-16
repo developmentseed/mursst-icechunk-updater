@@ -13,6 +13,7 @@ To develop and deploy this project, you will need the following tools installed 
 - **Docker**: The Lambda function is packaged as a Docker container, and Docker is required for local testing.
 - **AWS SAM CLI**: For running the function locally in a simulated Lambda environment.
 
+
 ## Project Setup
 
 1.  **Clone the Repository**
@@ -42,6 +43,11 @@ To develop and deploy this project, you will need the following tools installed 
 ## Local Development and Testing
 
 Running the function locally is crucial for rapid development and debugging. We use the **AWS SAM CLI** to invoke the function in a Docker container that simulates the AWS Lambda environment.
+
+**Set up development environment**
+```bash
+uv sync --group dev
+```
 
 **Step 1: Synthesize the CloudFormation Template**
 
@@ -80,8 +86,8 @@ The function requires several environment variables. Create a file named `env.js
 ```json
 {
   "MursstIcechunkUpdater": {
-    "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
     "ICECHUNK_STORE_DIRECT": "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2",
+    "DRY_RUN": "true",
     "LOCAL_TEST": "true",
     "EARTHDATA_USERNAME": "your-edl-username",
     "EARTHDATA_PASSWORD": "your-edl-password"
@@ -90,8 +96,8 @@ The function requires several environment variables. Create a file named `env.js
 ```
 **Important:**
 - Replace the placeholder values for `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` with your Earthdata Login credentials.
-- The `LOCAL_TEST: "true"` variable tells the function to use the username/password from this file instead of trying to fetch them from AWS Secrets Manager.
-- The top-level key `MursstIcechunkUpdater` must match the logical ID of the function in your CDK stack.
+- The `"LOCAL_TEST": "true"` variable tells the function to use the username/password from this file instead of trying to fetch them from AWS Secrets Manager.
+- The `"DRY_RUN": "true"` variable makes sure we are not commiting the changes from this test to the main branch.
 
 **Step 4: Invoke the Function Locally**
 
@@ -103,6 +109,11 @@ sam local invoke MursstIcechunkUpdater \
   --env-vars env.json
 ```
 This command will build the Docker image if it's the first time and then invoke your function handler. You will see all the logs, including your `DEBUG` messages, printed directly to your terminal.
+
+### Special instructions for JupyterHUb
+
+- docker
+- 
 
 ## Deployment
 
