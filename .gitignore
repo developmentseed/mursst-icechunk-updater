@@ -15,3 +15,6 @@ config.py
 *.ipynb_checkpoints/
 cdk/lambda/temp_requirements
 temp-requirements.txt
+cdk/env.json
+.gitignore
+cdk/events/event.json
