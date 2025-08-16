@@ -210,7 +210,7 @@ def dataset_from_search(
     if granule_results is None or len(granule_results) == 0:
         raise ValueError("No new data granules available")
 
-    data_urls = [g.data_links(access=access)[0] for g in granule_results]
+    data_urls = [g.data_links(access=access, in_region=True)[0] for g in granule_results]
 
     store, registry = obstore_and_registry_from_url(example_target_url)
     parser = HDFParser()
@@ -296,7 +296,7 @@ def test_store_on_branch(
     return tests_passed, error_message
 
 
-def write_to_icechunk_or_fail(
+def write_to_icechunk(
     store_target: str, limit_granules: int = None, parallel="lithops"
 ):
     repo = open_icechunk_repo(store_target)
@@ -320,62 +320,57 @@ def write_to_icechunk_or_fail(
         tzinfo=timezone.utc,
     ).isoformat(sep=" ")
 
-    try:
-        ## Search for new data and create a virtual dataset
-        vds = dataset_from_search(
-            last_timestep,
-            current_date,
-            virtual=True,
-            limit_granules=limit_granules,
-            parallel=parallel,
-        )
-        logger.debug(f"New Data (Virtual): {vds}")
-        # write to the icechunk store
-        main_snapshot = repo.lookup_branch("main")
-        logger.debug(f"Latest main snapshot: {main_snapshot}")
-        logger.info(f"Creating branch: {branchname}")
-        repo.create_branch(
-            branchname,
-            snapshot_id=main_snapshot,  # branches of the lates commit to main!
-        )
+    ## Search for new data and create a virtual dataset
+    vds = dataset_from_search(
+        last_timestep,
+        current_date,
+        virtual=True,
+        limit_granules=limit_granules,
+        parallel=parallel,
+    )
+    logger.debug(f"New Data (Virtual): {vds}")
+    # write to the icechunk store
+    main_snapshot = repo.lookup_branch("main")
+    logger.debug(f"Latest main snapshot: {main_snapshot}")
+    logger.info(f"Creating branch: {branchname}")
+    repo.create_branch(
+        branchname,
+        snapshot_id=main_snapshot,  # branches of the lates commit to main!
+    )
 
-        logger.info(f"writing to icechunk branch {branchname}")
-        commit_message = f"MUR update {branchname}"
-        session = repo.writable_session(branch=branchname)
-        vds.vz.to_icechunk(session.store, append_dim="time")
-        snapshot = session.commit(commit_message)
-        logger.info(
-            f"Commit successful to branch: {branchname} as snapshot:{snapshot} \n {commit_message}"
-        )
+    logger.info(f"writing to icechunk branch {branchname}")
+    commit_message = f"MUR update {branchname}"
+    session = repo.writable_session(branch=branchname)
+    vds.vz.to_icechunk(session.store, append_dim="time")
+    snapshot = session.commit(commit_message)
+    logger.info(
+        f"Commit successful to branch: {branchname} as snapshot:{snapshot} \n {commit_message}"
+    )
 
-        ## Compare data committed and reloaded from granules not using icechunk
-        logger.info("Reloading Dataset from branch")
-        ds_new = open_xr_dataset_from_branch(repo, branchname)
-        logger.info(f"Dataset on {branchname}: {ds_new}")
+    ## Compare data committed and reloaded from granules not using icechunk
+    logger.info("Reloading Dataset from branch")
+    ds_new = open_xr_dataset_from_branch(repo, branchname)
+    logger.info(f"Dataset on {branchname}: {ds_new}")
 
-        logger.info("Building Test Datasets")
-        ds_original = dataset_from_search(
-            last_timestep, current_date, virtual=False, limit_granules=limit_granules
-        )
-        logger.info(f"Test Dataset: {ds_original}")
+    logger.info("Building Test Datasets")
+    ds_original = dataset_from_search(
+        last_timestep, current_date, virtual=False, limit_granules=limit_granules
+    )
+    logger.info(f"Test Dataset: {ds_original}")
 
-        passed, message = test_store_on_branch(ds_new, ds_original)
+    passed, message = test_store_on_branch(ds_new, ds_original)
 
-        if not passed:
-            logger.info(f"Tests did not pass with: {message}")
-            return message
+    if not passed:
+        logger.info(f"Tests did not pass with: {message}")
+        return message
+    else:
+        logger.info("Tests passed.")
+        if os.environ.get("DRY_RUN", "false") == "true":
+            logger.info(f"Dry run, not merging {branchname} into main")
         else:
-            logger.info("Tests passed.")
-            if os.environ.get("DRY_RUN", "false") == "true":
-                logger.info(f"Dry run, not merging {branchname} into main")
-            else:
-                logger.info(f"merging {branchname} into main")
-                # append branch commit to main branch and delete test branch
-                repo.reset_branch("main", repo.lookup_branch(branchname))
-    except Exception as e:
-        return str(e)
-    except Exception as e:
-        return e.args[0]
+            logger.info(f"merging {branchname} into main")
+            # append branch commit to main branch and delete test branch
+            repo.reset_branch("main", repo.lookup_branch(branchname))
 
 
 def lambda_handler(event, context: dict = {}):
@@ -399,7 +394,7 @@ def lambda_handler(event, context: dict = {}):
         # this is for the final test (needs to be created by a local script)
         store_url = os.environ["ICECHUNK_STORE_DIRECT"]
         logger.info(f"Using icechunk store at {store_url}")
-        result = write_to_icechunk_or_fail(store_url, parallel=False)
+        result = write_to_icechunk(store_url, parallel=False)
 
         return {
             "statusCode": 200,

@@ -18,3 +18,4 @@ temp-requirements.txt
 cdk/env.json
 .gitignore
 cdk/events/event.json
+test_export
