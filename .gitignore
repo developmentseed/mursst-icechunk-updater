@@ -19,3 +19,7 @@ cdk/env.json
 .gitignore
 cdk/events/event.json
 test_export
+
+# don't commit dotenv files
+.env*
+.DS_Store
