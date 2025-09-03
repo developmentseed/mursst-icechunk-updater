@@ -55,7 +55,7 @@ jobs:
     # # Deploy to dev only on push (including merged PR) to `main` branch
     # if: github.event_name == 'push' && github.event.ref == 'refs/heads/main'
     # for now deploy on any push 
-    if: github.event_name == 'push'
+    # if: github.event_name == 'push'
     needs:
       - unit-tests
     uses: ./.github/workflows/deploy.yml
