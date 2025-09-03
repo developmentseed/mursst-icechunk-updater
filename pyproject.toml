@@ -11,6 +11,7 @@ dependencies = [
     "earthaccess>=0.13.0",
     "h5netcdf>=1.6.3",
     "icechunk>=1.0.0",
+    "pydantic-settings>=2.10.1",
     "requests>=2.25.0",
     "virtualizarr==2.0.0",
     "zarr>=3.1.0",
@@ -25,7 +26,6 @@ dev = [
     "ipykernel>=6.30.0",
     "pre-commit>=4.2.0",
     "pytest>=8.4.1",
-    "dotenv>=0.9.9",
     "lithops>=3.6.1",
     "aws-sam-cli>=1.142.1",
     "aws-cdk-cli>=2.1025.0",
@@ -38,11 +38,20 @@ notebook = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-package-dir = {"" = "cdk/lambda"}
-
 [tool.setuptools.packages.find]
-where = ["cdk/lambda"]
+include = ["cdk*"]
+
+# [tool.setuptools]
+# package-dir = {"" = "cdk/lambda"}
+
+# [tool.setuptools.packages.find]
+# where = ["cdk/lambda"]
+
+# [tool.setuptools]
+# package-dir = {"" = "cdk"}
+
+# [tool.setuptools.packages.find]
+# where = ["cdk"]
 
 [tool.pytest.ini_options]
 addopts = "-vv"

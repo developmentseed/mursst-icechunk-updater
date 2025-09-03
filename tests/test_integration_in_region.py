@@ -4,14 +4,9 @@ from lambda_function import (
     open_icechunk_repo,
     dataset_from_search,
     open_xr_dataset_from_branch,
-    write_to_icechunk_or_fail,
+    write_to_icechunk,
 )
 from datetime import datetime, timedelta
-
-
-def formatted_date_n_days_ago(n):
-    date_n_days_ago = datetime.utcnow() - timedelta(days=n)
-    return date_n_days_ago.date().isoformat() + " 21:00:00"
 
 
 @pytest.fixture(scope="module")
@@ -25,7 +20,9 @@ def full_vdataset():
     start_date = (
         datetime.utcnow() - timedelta(days=6)
     ).date().isoformat() + " 21:00:00"
-    end_date = (datetime.utcnow() - timedelta(days=3)).date().isoformat() + " 21:00:00"
+    end_date = (
+        datetime.now(datetime.UTC) - timedelta(days=3)
+    ).date().isoformat() + " 21:00:00"
 
     vds = dataset_from_search(
         start_date, end_date, virtual=True, parallel="lithops", limit_granules=2
@@ -67,7 +64,7 @@ def test_append(temp_icechunk_store, days_to_append):
     print(f"OLD DATASET for comparison {ds_old}")
 
     # now call the lambda wrapper function on this store
-    result = write_to_icechunk_or_fail(
+    result = write_to_icechunk(
         temp_icechunk_store, limit_granules=days_to_append, parallel=False
     )
 
@@ -81,7 +78,5 @@ def test_append(temp_icechunk_store, days_to_append):
 def test_nothing_to_append(temp_icechunk_store):
     """Test behavior when there is no data to append"""
     # now call the lambda wrapper function on this store
-    result = write_to_icechunk_or_fail(
-        temp_icechunk_store, limit_granules=0, parallel=False
-    )
+    result = write_to_icechunk(temp_icechunk_store, limit_granules=0, parallel=False)
     assert result == "No new data granules available"

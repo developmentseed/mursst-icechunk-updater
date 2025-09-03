@@ -19,6 +19,9 @@ from virtualizarr.parsers import HDFParser
 from virtualizarr.registry import ObjectStoreRegistry
 from obstore.store import S3Store
 from icechunk import S3StaticCredentials
+from cdk.settings import Settings
+
+settings = Settings()
 
 # Configure logging.
 # In AWS Lambda, basicConfig does nothing as a handler is already configured.
@@ -125,9 +128,12 @@ def get_icechunk_storage(target: str) -> icechunk.Storage:
     if target.startswith("s3://"):
         logger.info("Defining icechunk storage for s3")
         target_parsed = urlparse(target)
+        logger.info(f"{target_parsed}")
         storage = icechunk.s3_storage(
             bucket=target_parsed.netloc,
-            prefix=target_parsed.path,
+            prefix=target_parsed.path.lstrip(
+                "/"
+            ),  # TODO: Its kinda unfortunate that there is a leading slash in the path from urlparse (this seems like inconsistent behavior based on the docstring ("Parse a URL into 6 components:<scheme>://<netloc>/<path>;<params>?<query>#<fragment>") but what do I know 🤷
             from_env=True,
         )
     else:
@@ -138,6 +144,7 @@ def get_icechunk_storage(target: str) -> icechunk.Storage:
 
 def create_icechunk_repo(store_target: str) -> None:
     storage = get_icechunk_storage(store_target)
+    logger.info(f"{storage=}")
     config = icechunk.RepositoryConfig.default()
     config.set_virtual_chunk_container(
         icechunk.VirtualChunkContainer(
@@ -210,7 +217,11 @@ def dataset_from_search(
     if granule_results is None or len(granule_results) == 0:
         raise ValueError("No new data granules available")
 
-    data_urls = [g.data_links(access=access, in_region=True)[0] for g in granule_results]
+    in_region = True if access == "direct" else False
+
+    data_urls = [
+        g.data_links(access=access, in_region=in_region)[0] for g in granule_results
+    ]
 
     store, registry = obstore_and_registry_from_url(example_target_url)
     parser = HDFParser()
@@ -297,7 +308,11 @@ def test_store_on_branch(
 
 
 def write_to_icechunk(
-    store_target: str, limit_granules: int = None, parallel="lithops"
+    store_target: str,
+    run_tests: bool,
+    dry_run: bool,
+    limit_granules: int = None,
+    parallel="lithops",
 ):
     repo = open_icechunk_repo(store_target)
 
@@ -346,31 +361,46 @@ def write_to_icechunk(
     logger.info(
         f"Commit successful to branch: {branchname} as snapshot:{snapshot} \n {commit_message}"
     )
+    if run_tests:
+        ## Compare data committed and reloaded from granules not using icechunk
+        logger.info("Reloading Dataset from branch")
+        ds_new = open_xr_dataset_from_branch(repo, branchname)
+        logger.info(f"Dataset on {branchname}: {ds_new}")
 
-    ## Compare data committed and reloaded from granules not using icechunk
-    logger.info("Reloading Dataset from branch")
-    ds_new = open_xr_dataset_from_branch(repo, branchname)
-    logger.info(f"Dataset on {branchname}: {ds_new}")
+        logger.info("Building Test Datasets")
+        ds_original = dataset_from_search(
+            last_timestep,
+            current_date,
+            virtual=False,
+            access="external",  # somehow the non virtual version does not work with direct links.
+            limit_granules=limit_granules,
+        )
+        logger.info(f"Test Dataset: {ds_original}")
 
-    logger.info("Building Test Datasets")
-    ds_original = dataset_from_search(
-        last_timestep, current_date, virtual=False, limit_granules=limit_granules
-    )
-    logger.info(f"Test Dataset: {ds_original}")
+        passed, message = test_store_on_branch(ds_new, ds_original)
 
-    passed, message = test_store_on_branch(ds_new, ds_original)
-
-    if not passed:
-        logger.info(f"Tests did not pass with: {message}")
-        return message
-    else:
-        logger.info("Tests passed.")
-        if os.environ.get("DRY_RUN", "false") == "true":
-            logger.info(f"Dry run, not merging {branchname} into main")
+        if not passed:
+            logger.info(f"Tests did not pass with: {message}")
+            return message
         else:
-            logger.info(f"merging {branchname} into main")
-            # append branch commit to main branch and delete test branch
-            repo.reset_branch("main", repo.lookup_branch(branchname))
+            logger.info("Tests passed.")
+    else:
+        logger.info(f"Got {run_tests=}. Tests skipped.")
+
+    if dry_run:
+        logger.info(f"Dry run, not merging {branchname} into main")
+    else:
+        logger.info(f"merging {branchname} into main")
+        # append branch commit to main branch and delete test branch
+        repo.reset_branch("main", repo.lookup_branch(branchname))
+
+
+def store_url_from_env():
+    store_url = (
+        os.path.join(os.environ["ICECHUNK_DIRECT_PREFIX"], os.environ["STORE_NAME"])
+        + "/"
+    )
+    return store_url
 
 
 def lambda_handler(event, context: dict = {}):
@@ -391,10 +421,15 @@ def lambda_handler(event, context: dict = {}):
             os.environ["EARTHDATA_USERNAME"] = secrets["EARTHDATA_USERNAME"]
             os.environ["EARTHDATA_PASSWORD"] = secrets["EARTHDATA_PASSWORD"]
 
-        # this is for the final test (needs to be created by a local script)
-        store_url = os.environ["ICECHUNK_STORE_DIRECT"]
+        store_url = store_url_from_env()
         logger.info(f"Using icechunk store at {store_url}")
-        result = write_to_icechunk(store_url, parallel=False)
+        result = write_to_icechunk(
+            store_url,
+            run_tests=settings.run_tests,
+            dry_run=settings.dry_run,
+            limit_granules=settings.limit_granules,
+            parallel=False,
+        )
 
         return {
             "statusCode": 200,

@@ -22,13 +22,8 @@ To develop and deploy this project, you will need the following tools installed 
     cd mursst-icechunk-updater/cdk
     ```
 
-2.  **Set up CDK Virtual Environment**
-    This environment is for running the `cdk` commands.
-    ```bash
-    uv venv .venv
-    source .venv/bin/activate
-    uv pip install -r requirements.txt
-    ```
+2. **Set up environment**
+ 
 
 ## Local Development and Testing
 
