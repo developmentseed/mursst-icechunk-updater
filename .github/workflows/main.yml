@@ -46,7 +46,7 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests
-        run: uv run pytest --ignore=test_integration_in_region.py
+        run: uv run pytest --ignore=tests/test_integration_in_region.py
 
       - name: Check uv lockfile
         run: uv lock --check

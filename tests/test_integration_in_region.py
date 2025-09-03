@@ -1,12 +1,12 @@
 import pytest
-from lambda_function import (
+from cdk.aws_lambda.lambda_function import (
     create_icechunk_repo,
     open_icechunk_repo,
     dataset_from_search,
     open_xr_dataset_from_branch,
     write_to_icechunk,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @pytest.fixture(scope="module")
@@ -18,10 +18,10 @@ def full_vdataset():
 
     # Ill define a generous time range and then cull to the latest 5 available
     start_date = (
-        datetime.utcnow() - timedelta(days=6)
+        datetime.now(timezone.utc) - timedelta(days=6)
     ).date().isoformat() + " 21:00:00"
     end_date = (
-        datetime.now(datetime.UTC) - timedelta(days=3)
+        datetime.now(timezone.utc) - timedelta(days=3)
     ).date().isoformat() + " 21:00:00"
 
     vds = dataset_from_search(
