@@ -1,4 +1,4 @@
-from lambda_function import create_icechunk_repo, open_icechunk_repo
+from cdk.aws_lambda.lambda_function import create_icechunk_repo, open_icechunk_repo
 
 
 def test_persistent_virt_container_config(tmp_path):

@@ -25,6 +25,7 @@ h5py==3.14.0
 icechunk==1.0.0
 idna==3.10
 importlib-resources==6.5.2
+iniconfig==2.1.0
 jmespath==1.0.1
 locket==1.0.0
 multidict==6.6.3
@@ -35,11 +36,15 @@ obstore==0.7.0
 packaging==25.0
 pandas==2.3.1
 partd==1.4.2
+pluggy==1.6.0
 pqdm==0.2.0
 propcache==0.3.2
 pydantic==2.11.7
 pydantic-core==2.33.2
 pydantic-settings==2.10.1
+pygments==2.19.2
+pytest==8.4.1
+pytest-env==1.1.5
 python-cmr==0.13.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1

@@ -12,6 +12,7 @@ dependencies = [
     "h5netcdf>=1.6.3",
     "icechunk>=1.0.0",
     "pydantic-settings>=2.10.1",
+    "pytest-env>=1.1.5",
     "requests>=2.25.0",
     "virtualizarr==2.0.0",
     "zarr>=3.1.0",
@@ -41,20 +42,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["cdk*"]
 
-# [tool.setuptools]
-# package-dir = {"" = "cdk/lambda"}
-
-# [tool.setuptools.packages.find]
-# where = ["cdk/lambda"]
-
-# [tool.setuptools]
-# package-dir = {"" = "cdk"}
-
-# [tool.setuptools.packages.find]
-# where = ["cdk"]
-
 [tool.pytest.ini_options]
 addopts = "-vv"
 testpaths = [
     "tests"
+]
+env = [
+    "STACK_NAME = MUR_SST",
+    "STAGE = test",
 ]
