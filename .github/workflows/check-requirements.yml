@@ -9,9 +9,9 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - name: Check requirements.txt is in sync
         run: |
-          uv export --format=requirements.txt --no-hashes --no-annotate --no-header > temp-requirements.txt
+          uv export --format=requirements.txt --no-hashes --no-annotate --no-header --no-group dev> temp-requirements.txt
           diff temp-requirements.txt cdk/aws_lambda/requirements.txt || (
             echo "requirements.txt is out of sync with pyproject.toml"
-            echo "Run: uv export --format=requirements.txt --no-hashes --no-annotate --no-header > cdk/lambda/requirements.txt or use pre-commit"
+            echo "Run: uv export --format=requirements.txt --no-hashes --no-annotate --no-header > cdk/aws_lambda/requirements.txt or use pre-commit"
             exit 1
           )
