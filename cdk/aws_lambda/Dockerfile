@@ -5,7 +5,7 @@ RUN dnf update -y && \
     dnf install -y findutils && \
     dnf clean all
 
-COPY lambda/requirements.txt .
+COPY aws_lambda/requirements.txt .
 RUN pip install -r requirements.txt --target /asset
 
 # Reduce package size and remove useless files
