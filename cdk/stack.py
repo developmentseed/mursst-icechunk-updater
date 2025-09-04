@@ -3,6 +3,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_iam as iam,
     aws_sns as sns,
+    aws_sns_subscriptions as sns_subs,
     aws_cloudwatch as cloudwatch,
     aws_cloudwatch_actions as cloudwatch_actions,
     aws_events as events,
@@ -16,20 +17,21 @@ import os
 class MursstStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # 👇 derive environment suffix from construct_id (e.g. "prod" / "staging")
+        env_suffix = construct_id.split("-")[-1]
+
         # Create or import IAM role for Lambda based on environment variable
-        lambda_role = None
         if "LAMBDA_FUNCTION_ROLE" in os.environ:
-            # Import existing role using ARN from environment variable
             lambda_role = iam.Role.from_role_arn(
                 self,
-                "ImportedMursstLambdaRole",
+                f"ImportedMursstLambdaRole-{env_suffix}",
                 role_arn=os.environ["LAMBDA_FUNCTION_ROLE"],
             )
         else:
-            # Create new role if environment variable is not set
             lambda_role = iam.Role(
                 self,
-                "MursstLambdaRole",
+                f"MursstLambdaRole-{env_suffix}",
                 assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
                 managed_policies=[
                     iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -41,10 +43,10 @@ class MursstStack(Stack):
                 ],
             )
 
-        # Create Lambda function using the determined role
+        # Lambda function
         lambda_function = _lambda.Function(
             self,
-            "MursstIcechunkUpdater",
+            f"MursstIcechunkUpdater-{env_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_docker_build(
@@ -54,98 +56,85 @@ class MursstStack(Stack):
             ),
             role=lambda_role,
             environment={
-                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",  # Replace with your secret ARN
-                # "DRY_RUN": "true", # Deactivate write for now
-                # "ICECHUNK_STORE_DIRECT": "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2",
+                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
             },
             timeout=Duration.seconds(600),
-            # memory_size=1024,
-            memory_size=4096,
+            memory_size=1024,
+            function_name=f"mursst-icechunk-updater-{env_suffix}",  # 👈 env-specific name
         )
 
-        # Create SNS topic for notifications
+        # SNS topic
         notification_topic = sns.Topic(
             self,
-            "MursstIcechunkUpdaterNotificationTopic",
-            topic_name="mursst-icechunk-updater-notifications",
+            f"MursstIcechunkUpdaterNotificationTopic-{env_suffix}",
+            topic_name=f"mursst-icechunk-updater-notifications-{env_suffix}",
         )
 
-        # Add email subscription to SNS topic
-        # Note: You'll need to confirm the subscription in your email
-        sns.Subscription(
-            self,
-            "MursstIcechunkUpdaterEmailSubscription",
-            topic=notification_topic,
-            protocol=sns.SubscriptionProtocol.EMAIL,
-            endpoint="aimee@developmentseed.org",  # Replace with your email
+        # Email subscription
+        notification_topic.add_subscription(
+            sns_subs.EmailSubscription("aimee@developmentseed.org")
         )
 
-        # Create EventBridge rule to trigger Lambda daily at 6am PT (14:00 UTC)
+        # EventBridge rule
         daily_rule = events.Rule(
             self,
-            "MursstDailyRule",
+            f"MursstDailyRule-{env_suffix}",
             schedule=events.Schedule.cron(
                 minute="0",
-                hour="14",  # 6am PT = 14:00 UTC (during PDT) or 13:00 UTC (during PST)
+                hour="14",  # 6am PT (PDT) / 13 UTC (PST)
                 day="*",
                 month="*",
                 year="*",
             ),
-            description="Trigger Mursst Lambda function daily at 6am PT",
+            description=f"Trigger Mursst Lambda function daily at 6am PT ({env_suffix})",
+            rule_name=f"mursst-daily-rule-{env_suffix}",
         )
-
-        # Add Lambda as target for the EventBridge rule
         daily_rule.add_target(targets.LambdaFunction(lambda_function))
 
-        # Create CloudWatch alarm for Lambda errors
+        # CloudWatch alarms
         lambda_error_alarm = cloudwatch.Alarm(
             self,
-            "MursstLambdaErrorAlarm",
+            f"MursstLambdaErrorAlarm-{env_suffix}",
             metric=lambda_function.metric_errors(),
             threshold=1,
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarm_description="Alarm when Lambda function encounters errors",
+            alarm_description=f"Alarm when Lambda function encounters errors ({env_suffix})",
+            alarm_name=f"mursst-lambda-error-alarm-{env_suffix}",
         )
-
-        # Add SNS action to the error alarm
         lambda_error_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
         )
 
-        # Create CloudWatch alarm for Lambda invocations (success notifications)
         lambda_invocation_alarm = cloudwatch.Alarm(
             self,
-            "MursstLambdaInvocationAlarm",
+            f"MursstLambdaInvocationAlarm-{env_suffix}",
             metric=lambda_function.metric_invocations(),
             threshold=1,
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarm_description="Alarm when Lambda function is invoked successfully",
+            alarm_description=f"Alarm when Lambda function is invoked successfully ({env_suffix})",
+            alarm_name=f"mursst-lambda-invocation-alarm-{env_suffix}",
         )
-
-        # Add SNS action to the invocation alarm
         lambda_invocation_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
         )
 
-        # Grant Lambda permissions to publish to SNS
+        # Permissions
         notification_topic.grant_publish(lambda_function)
 
-        # Add EventBridge permissions to invoke Lambda
         lambda_function.add_permission(
-            "AllowEventBridgeInvoke",
+            f"AllowEventBridgeInvoke-{env_suffix}",
             principal=iam.ServicePrincipal("events.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=daily_rule.rule_arn,
         )
 
-        # Grant Lambda permissions to access Secrets Manager
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 actions=["secretsmanager:GetSecretValue"],
                 resources=[
                     "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"
-                ],  # Replace with your secret ARN
+                ],
             )
         )
