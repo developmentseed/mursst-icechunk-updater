@@ -5,7 +5,7 @@ RUN dnf update -y && \
     dnf install -y findutils && \
     dnf clean all
 
-COPY aws_lambda/requirements.txt .
+COPY src/requirements.txt .
 
 # Install packages with optimization flags
 RUN pip install -r requirements.txt --target /asset \
@@ -50,7 +50,14 @@ RUN cd /asset && \
     # Strip binaries if any
     find . -name '*.so' -exec strip {} + 2>/dev/null || true
 
+RUN mkdir -p /asset/src
+
+# copy dependencies
+COPY src/updater.py /asset/src/updater.py
+COPY src/settings.py /asset/src/settings.py
+
 # Copy your Lambda function
-COPY aws_lambda/lambda_function.py /asset/lambda_function.py
+COPY src/lambda_function.py /asset/lambda_function.py
+
 
 CMD ["lambda_function.lambda_handler"]
