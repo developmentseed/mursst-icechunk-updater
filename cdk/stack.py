@@ -49,7 +49,7 @@ class MursstStack(Stack):
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_docker_build(
                 path=os.path.abspath("."),
-                file="lambda/Dockerfile",
+                file="aws_lambda/Dockerfile",
                 platform="linux/amd64",
             ),
             role=lambda_role,

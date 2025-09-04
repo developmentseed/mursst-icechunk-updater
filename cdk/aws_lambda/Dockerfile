@@ -15,6 +15,6 @@ RUN cd /asset && find . -type f -a -name '*.py' -print0 | xargs -0 rm -f
 RUN find /asset -type d -a -name 'tests' -print0 | xargs -0 rm -rf
 RUN rm -rdf /asset/numpy/doc/ /asset/bin /asset/geos_license /asset/Misc
 
-COPY lambda/lambda_function.py /asset/lambda_function.py
+COPY aws_lambda/lambda_function.py /asset/lambda_function.py
 
 CMD ["lambda_function.lambda_handler"]
