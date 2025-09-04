@@ -19,8 +19,6 @@ RUN cd /asset && \
     find . -type d -name 'test' -exec rm -rf {} + 2>/dev/null || true && \
     find . -type d -name '*tests*' -exec rm -rf {} + 2>/dev/null || true && \
     # Remove documentation
-    find . -type d -name 'doc' -exec rm -rf {} + 2>/dev/null || true && \
-    find . -type d -name 'docs' -exec rm -rf {} + 2>/dev/null || true && \
     find . -type d -name 'examples' -exec rm -rf {} + 2>/dev/null || true && \
     find . -type d -name 'benchmarks' -exec rm -rf {} + 2>/dev/null || true && \
     # Remove __pycache__ directories
