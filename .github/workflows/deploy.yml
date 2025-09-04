@@ -64,15 +64,15 @@ jobs:
       #       jq -r <<<"$SECRETS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
       #     )
 
-      # - name: Convert vars to environment variables
-      #   env:
-      #     VARS_JSON: ${{ toJson(vars) }}
-      #   run: |
-      #     while read -rd $'' line; do
-      #       echo "$line" >> $GITHUB_ENV
-      #     done < <(
-      #       jq -r <<<"$VARS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
-      #     )
+      - name: Convert vars to environment variables
+        env:
+          VARS_JSON: ${{ toJson(vars) }}
+        run: |
+          while read -rd $'' line; do
+            echo "$line" >> $GITHUB_ENV
+          done < <(
+            jq -r <<<"$VARS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
+          )
 
       - name: Deploy to ${{ inputs.environment }}
-        run: uv run cdk deploy --require-approval never
+        run: cd cdk; uv run cdk deploy --require-approval never
