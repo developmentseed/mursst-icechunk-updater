@@ -1,22 +1,19 @@
 import pytest
-from cdk.aws_lambda.lambda_function import (
-    create_icechunk_repo,
-    open_icechunk_repo,
-    dataset_from_search,
-    open_xr_dataset_from_branch,
-    write_to_icechunk,
-)
 from datetime import datetime, timedelta, timezone
+
+from src.updater import MursstUpdater
 
 
 @pytest.fixture(scope="module")
 def full_vdataset():
-    """Get a single dataset that has enough missing timesteps to serve for all the append test cases below.
+    """
+    Get a single dataset that has enough missing timesteps to serve for all the append test cases below.
     These test here are written to ensure that past appends will again succeed, and not to detect problems with
     recently released data, so we dont care that these granules are a while back
     """
+    updater = MursstUpdater()
 
-    # Ill define a generous time range and then cull to the latest 5 available
+    # Use a generous time range and then cull to the latest 2 available
     start_date = (
         datetime.now(timezone.utc) - timedelta(days=6)
     ).date().isoformat() + " 21:00:00"
@@ -24,59 +21,97 @@ def full_vdataset():
         datetime.now(timezone.utc) - timedelta(days=3)
     ).date().isoformat() + " 21:00:00"
 
-    vds = dataset_from_search(
+    vds = updater.dataset_from_search(
         start_date, end_date, virtual=True, parallel="lithops", limit_granules=2
     )
-
     return vds
 
 
 @pytest.fixture()
 def temp_icechunk_store(tmp_path, full_vdataset):
-    """Create a temporary icechunk store that is missing the 3 latest granules"""
+    """Create a temporary icechunk store that is missing the latest granules"""
+    updater = MursstUpdater()
     path = str(tmp_path / "temp_store")
-    # create empty repo
-    create_icechunk_repo(path)
-    # open the repo
-    repo = open_icechunk_repo(path)
 
+    # Create empty repo
+    updater.create_icechunk_repo(path)
+
+    # Open the repo
+    repo = updater.open_icechunk_repo(path)
     print(f"Full vds in fixture {full_vdataset}")
 
-    # crop dataset before saving
-    vds = full_vdataset
-
-    # Get data and combine into virtual dataset
-
-    # vds = dataset_from_search(start_date, end_date, virtual=True, parallel=False)
-    # # TODO. The lithops exec fails when using pyteset-xdist. I think this is due to the fact that they all share the same temp dict?
-    # # TODO: Maybe it is possible to modify virtualizarr to pass a custom dir? This seems like a bunch of work.
-    # # write to store
+    # Write initial data to store
     session = repo.writable_session("main")
-    vds.vz.to_icechunk(session.store)
+    full_vdataset.vz.to_icechunk(session.store)
     session.commit("Write Test Data")
+
     return path
 
 
-@pytest.mark.parametrize("days_to_append", [1, 2])
-def test_append(temp_icechunk_store, days_to_append):
-    repo = open_icechunk_repo(temp_icechunk_store)
-    ds_old = open_xr_dataset_from_branch(repo, "main")
-    print(f"OLD DATASET for comparison {ds_old}")
+class TestIntegrationTests:
+    """Integration tests using temporary icechunk stores."""
 
-    # now call the lambda wrapper function on this store
-    result = write_to_icechunk(
-        temp_icechunk_store, limit_granules=days_to_append, parallel=False
-    )
+    @pytest.mark.parametrize("days_to_append", [1, 2])
+    def test_append_data(self, temp_icechunk_store, days_to_append):
+        """Test appending new data to existing store."""
+        # Get initial state
+        updater_instance = MursstUpdater()
+        repo = updater_instance.open_icechunk_repo(temp_icechunk_store)
+        ds_old = updater_instance.open_xr_dataset_from_branch(repo, "main")
+        initial_time_length = len(ds_old.time)
+        print(f"OLD DATASET for comparison {ds_old}")
 
-    # Load the resulting dataset and test
-    ds = open_xr_dataset_from_branch(repo, "main")
-    assert len(ds.time) == days_to_append + 2
-    assert result == "Success"
+        # Run the update
+        result = updater_instance.update_icechunk_store(
+            store_target=temp_icechunk_store,
+            run_tests=False,  # Skip tests for faster execution
+            dry_run=False,
+            limit_granules=days_to_append,
+            parallel=False,
+        )
 
+        # Verify results
+        ds_new = updater_instance.open_xr_dataset_from_branch(repo, "main")
+        assert len(ds_new.time) == initial_time_length + days_to_append
+        assert "Successfully updated store" in result
 
-# def test_nothing_to_append(temp_icechunk_store):
-def test_nothing_to_append(temp_icechunk_store):
-    """Test behavior when there is no data to append"""
-    # now call the lambda wrapper function on this store
-    result = write_to_icechunk(temp_icechunk_store, limit_granules=0, parallel=False)
-    assert result == "No new data granules available"
+    def test_nothing_to_append(self, temp_icechunk_store):
+        """Test behavior when there is no data to append"""
+        updater_instance = MursstUpdater()
+        with pytest.raises(ValueError) as exc_info:
+            updater_instance.update_icechunk_store(
+                store_target=temp_icechunk_store,
+                run_tests=False,
+                dry_run=False,
+                limit_granules=0,
+                parallel=False,
+            )
+
+        assert "No new data granules available" in str(exc_info.value)
+
+    def test_dry_run_mode(self, temp_icechunk_store):
+        """Test dry run functionality."""
+        updater_instance = MursstUpdater()
+        # Get initial state
+        repo = updater_instance.open_icechunk_repo(temp_icechunk_store)
+        ds_old = updater_instance.open_xr_dataset_from_branch(repo, "main")
+        initial_time_length = len(ds_old.time)
+
+        # Run in dry run mode
+        result = updater_instance.update_icechunk_store(
+            store_target=temp_icechunk_store,
+            run_tests=False,
+            dry_run=True,  # This should prevent merging to main
+            limit_granules=1,
+            parallel=False,
+        )
+
+        # Verify main branch is unchanged
+        ds_after = updater_instance.open_xr_dataset_from_branch(repo, "main")
+        assert len(ds_after.time) == initial_time_length  # No change to main
+        assert "Dry run completed" in result
+
+        # Verify branch was created
+        branches = repo.list_branches()
+        test_branches = [name for name in branches if name.startswith("add_time_")]
+        assert len(test_branches) > 0  # Branch should exist

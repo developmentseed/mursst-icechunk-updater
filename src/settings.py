@@ -8,3 +8,6 @@ class Settings(BaseSettings):
     limit_granules: Optional[int] = None
     stack_name: str
     stage: str
+    store_name: str
+    icechunk_direct_prefix: str
+    local_test: bool = False

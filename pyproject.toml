@@ -28,7 +28,6 @@ dev = [
     "lithops>=3.6.1",
     "aws-sam-cli>=1.142.1",
     "aws-cdk-cli>=2.1025.0",
-    "pytest-env>=1.1.5",
 ]
 notebook = [
     "matplotlib>=3.10.5",
@@ -39,14 +38,10 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["cdk*"]
+include = ["src*"]
 
 [tool.pytest.ini_options]
 addopts = "-vv"
 testpaths = [
     "tests"
-]
-env = [
-    "STACK_NAME = MUR_SST",
-    "STAGE = test",
 ]

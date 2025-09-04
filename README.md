@@ -108,7 +108,7 @@ export UV_ENV_FILE=.env.<STAGE>
 ### Testing
 
 >[!WARNING]
-> Running the tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub.
+> Running the tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub. 
 
 Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
 
@@ -131,13 +131,7 @@ uv run python scripts/rebuild_store.py
 >This will fail if the repository (even if empty) exists. In that case you have to delete the store manually before proceeding.
 
 ### Run update logic manually
-To run the update logic (which will be deployed inside the lambda) locally, run:
-```bash
-export LOCAL_TEST=true
-uv run python -c "from cdk.aws_lambda.lambda_function import lambda_handler; lambda_handler({})"
-```
-
-You can further modify local execution by setting environment variables
+To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
 ```
 export DRY_RUN=true #do not commit to the main icechunk branch
 ```
@@ -149,6 +143,12 @@ export RUN_TESTS=false #Omit (expensive) testing
 ```
 export LIMIT_GRANULES=3
 # only add up to 3 new granules
+```
+
+and then run:
+```bash
+export LOCAL_TEST=true
+uv run python src/lambda_function.py
 ```
 
 ### GH Actions based deployment
