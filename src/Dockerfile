@@ -10,8 +10,7 @@ COPY src/requirements.txt .
 # Install packages with optimization flags
 RUN pip install -r requirements.txt --target /asset \
     --no-cache-dir \
-    --compile \
-    --no-deps-check-hash-checking
+    --compile
 
 # Remove development and test files
 RUN cd /asset && \
