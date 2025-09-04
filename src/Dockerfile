@@ -28,8 +28,6 @@ RUN cd /asset && \
     # Remove .pyc files
     find . -name '*.pyc' -delete && \
     find . -name '*.pyo' -delete && \
-    # Remove .py files (keep .pyc compiled versions)
-    find . -name '*.py' -delete && \
     # Remove specific large directories that aren't needed at runtime
     rm -rf bin/ geos_license/ Misc/ && \
     rm -rf numpy/doc/ numpy/tests/ && \
