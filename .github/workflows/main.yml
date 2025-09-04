@@ -1,4 +1,4 @@
-name: MUR-SST Ichchunk Updater
+name: MUR-SST Icechunk Updater
 
 on:
   workflow_dispatch:
