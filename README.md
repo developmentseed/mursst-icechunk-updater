@@ -65,8 +65,7 @@ session = repo.readonly_session('main')
 ds = xr.open_zarr(session.store, zarr_format=3, consolidated=False)
 ds['analysed_sst'].isel(time=0, lon=slice(10000, 12000), lat=slice(10000, 12000)).plot()
 ```
-
-> This has been tested on the NASA VEDA hub only for now.
+> This has been tested on the NASA VEDA hub.
 
 ## Development Guide
 
@@ -108,7 +107,7 @@ export UV_ENV_FILE=.env.<STAGE>
 ### Testing
 
 >[!WARNING]
-> Running the tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub. 
+> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub. 
 
 Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
 

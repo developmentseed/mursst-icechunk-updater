@@ -75,4 +75,4 @@ jobs:
           )
 
       - name: Deploy to ${{ inputs.environment }}
-        run: cd cdk; uv run cdk deploy --require-approval never
+        run: uv run cdk deploy --require-approval never

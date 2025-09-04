@@ -51,7 +51,7 @@ class MursstStack(Stack):
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_docker_build(
                 path=os.path.abspath("."),
-                file="aws_lambda/Dockerfile",
+                file="src/Dockerfile",
                 platform="linux/amd64",
             ),
             role=lambda_role,
@@ -72,7 +72,7 @@ class MursstStack(Stack):
 
         # Email subscription
         notification_topic.add_subscription(
-            sns_subs.EmailSubscription("aimee@developmentseed.org")
+            sns_subs.EmailSubscription("contact@juliusbusecke.com")
         )
 
         # EventBridge rule

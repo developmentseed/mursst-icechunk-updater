@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from aws_cdk import App, Tags
 from stack import MursstStack
-from settings import Settings
+from src.settings import Settings
 
 settings = Settings()
 
