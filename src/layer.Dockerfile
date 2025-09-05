@@ -7,7 +7,7 @@ RUN dnf update -y && \
     dnf clean all
 
 # Copy requirements file
-COPY layer-requirements.txt /tmp/
+COPY src/layer-requirements.txt /tmp/
 
 # Install packages to the correct layer directory structure
 # Lambda layers must be in /opt/python/ for Python packages
