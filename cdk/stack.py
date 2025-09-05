@@ -21,6 +21,20 @@ class MursstStack(Stack):
         # 👇 derive environment suffix from construct_id (e.g. "prod" / "staging")
         env_suffix = construct_id.split("-")[-1]
 
+        # Create Lambda Layer for dependencies
+        dependencies_layer = _lambda.LayerVersion(
+            self,
+            f"MursstDependenciesLayer-{env_suffix}",
+            code=_lambda.Code.from_docker_build(
+                path=os.path.abspath("."),
+                file="src/layer.Dockerfile",  # Create this file
+                platform="linux/amd64",
+            ),
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            description=f"Dependencies for Mursst Lambda (earthaccess, boto3, etc.) - {env_suffix}",
+            layer_version_name=f"mursst-dependencies-{env_suffix}",
+        )
+
         # Create or import IAM role for Lambda based on environment variable
         if "LAMBDA_FUNCTION_ROLE" in os.environ:
             lambda_role = iam.Role.from_role_arn(
@@ -51,16 +65,17 @@ class MursstStack(Stack):
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_docker_build(
                 path=os.path.abspath("."),
-                file="src/Dockerfile",
+                file="src/function.Dockerfile",  # Create this file
                 platform="linux/amd64",
             ),
             role=lambda_role,
+            layers=[dependencies_layer],
             environment={
                 "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
             },
             timeout=Duration.seconds(600),
             memory_size=1024,
-            function_name=f"mursst-icechunk-updater-{env_suffix}",  # 👈 env-specific name
+            function_name=f"mursst-icechunk-updater-{env_suffix}",
         )
 
         # SNS topic
