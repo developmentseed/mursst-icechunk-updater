@@ -10,6 +10,7 @@ from aws_cdk import (
     aws_events_targets as targets,
     Duration,
 )
+from aws_cdk import aws_ecr_assets as ecr_assets
 from constructs import Construct
 import os
 
@@ -50,7 +51,7 @@ class MursstStack(Stack):
             code=_lambda.DockerImageCode.from_image_asset(
                 directory=os.path.abspath("."),
                 file="src/Dockerfile",
-                platform="linux/amd64",
+                platform=ecr_assets.Platform.LINUX_AMD64,
             ),
             role=lambda_role,
             environment={
