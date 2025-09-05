@@ -28,6 +28,5 @@ RUN find /opt/python -type f -name '*.pyc' -delete && \
 
 # The layer will be packaged from /opt/
 
-# 👇 CDK expects /asset-output or /asset
-RUN mkdir -p /asset/python
-COPY --from=0 /opt/python /asset/python
+# ✅ put the built layer into /asset so CDK can find it
+RUN mkdir -p /asset/python && cp -r /opt/python/* /asset/python/
