@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 # Import business logic
 from src.updater import MursstUpdater, get_secret_from_aws
-from src.settings import Settings
+from src.settings import RuntimeSettings
 
 # Configure logging for Lambda
 logging.basicConfig(
@@ -87,7 +87,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     try:
         # Load settings
-        settings = Settings()
+        settings = RuntimeSettings()
         logger.info(
             f"Loaded settings: run_tests={settings.run_tests}, dry_run={settings.dry_run}, limit_granules={settings.limit_granules}"
         )

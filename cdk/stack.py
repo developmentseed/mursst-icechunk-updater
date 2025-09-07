@@ -12,26 +12,32 @@ from aws_cdk import (
 )
 from constructs import Construct
 import os
+from src.settings import DeploymentSettings
 
 
 class MursstStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # 👇 derive environment suffix from construct_id (e.g. "prod" / "staging")
-        env_suffix = construct_id.split("-")[-1]
+        # Load ALL settings (runtime + deployment) with validation
+        deploy_config = DeploymentSettings()
+        # TODO: Refactor the SECRET_ARN into the environments (as secret?)
+        env_dict = deploy_config.create_lambda_environment()
+        env_dict["SECRET_ARN"] = (
+            "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"
+        )
 
         # Create or import IAM role for Lambda based on environment variable
         if "LAMBDA_FUNCTION_ROLE" in os.environ:
             lambda_role = iam.Role.from_role_arn(
                 self,
-                f"ImportedMursstLambdaRole-{env_suffix}",
+                f"MursstIcechunkUpdater-{deploy_config.stage}",
                 role_arn=os.environ["LAMBDA_FUNCTION_ROLE"],
             )
         else:
             lambda_role = iam.Role(
                 self,
-                f"MursstLambdaRole-{env_suffix}",
+                f"MursstLambdaRole-{deploy_config.stage}",
                 assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
                 managed_policies=[
                     iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -43,27 +49,10 @@ class MursstStack(Stack):
                 ],
             )
 
-        # # Lambda function (Ship Container Image, currently blocked by permissions)
-        # lambda_function = _lambda.DockerImageFunction(
-        #     self,
-        #     f"MursstIcechunkUpdater-{env_suffix}",
-        #     code=_lambda.DockerImageCode.from_image_asset(
-        #         directory=os.path.abspath("."),
-        #         file="src/Dockerfile",
-        #         platform=ecr_assets.Platform.LINUX_AMD64,
-        #     ),
-        #     role=lambda_role,
-        #     environment={
-        #         "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
-        #     },
-        #     timeout=Duration.seconds(600),
-        #     memory_size=1024,
-        #     function_name=f"mursst-icechunk-updater-{env_suffix}",
-        # )
         # Lambda function
         lambda_function = _lambda.Function(
             self,
-            f"MursstIcechunkUpdater-{env_suffix}",
+            f"MursstIcechunkUpdater-{deploy_config.stage}",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="lambda_function.lambda_handler",
             code=_lambda.Code.from_docker_build(
@@ -72,30 +61,30 @@ class MursstStack(Stack):
                 platform="linux/amd64",
             ),
             role=lambda_role,
-            environment={
-                "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
-            },
-            timeout=Duration.seconds(600),
-            memory_size=1024,
-            function_name=f"mursst-icechunk-updater-{env_suffix}",
+            # Use deployment settings for infrastructure
+            timeout=Duration.seconds(deploy_config.lambda_timeout_seconds),
+            memory_size=deploy_config.lambda_memory_size,
+            function_name=f"mursst-icechunk-updater-{deploy_config.stage}",
+            # Convert deployment settings to runtime environment variables
+            environment=env_dict,
         )
 
         # SNS topic
         notification_topic = sns.Topic(
             self,
-            f"MursstIcechunkUpdaterNotificationTopic-{env_suffix}",
-            topic_name=f"mursst-icechunk-updater-notifications-{env_suffix}",
+            f"MursstIcechunkUpdaterNotificationTopic-{deploy_config.stage}",
+            topic_name=f"mursst-icechunk-updater-notifications-{deploy_config.stage}",
         )
 
         # Email subscription
         notification_topic.add_subscription(
-            sns_subs.EmailSubscription("contact@juliusbusecke.com")
+            sns_subs.EmailSubscription(deploy_config.notification_email)
         )
 
         # EventBridge rule
         daily_rule = events.Rule(
             self,
-            f"MursstDailyRule-{env_suffix}",
+            f"MursstDailyRule-{deploy_config.stage}",
             schedule=events.Schedule.cron(
                 minute="0",
                 hour="14",  # 6am PT (PDT) / 13 UTC (PST)
@@ -103,21 +92,21 @@ class MursstStack(Stack):
                 month="*",
                 year="*",
             ),
-            description=f"Trigger Mursst Lambda function daily at 6am PT ({env_suffix})",
-            rule_name=f"mursst-daily-rule-{env_suffix}",
+            description=f"Trigger Mursst Lambda function daily at 6am PT ({deploy_config.stage})",
+            rule_name=f"mursst-daily-rule-{deploy_config.stage}",
         )
         daily_rule.add_target(targets.LambdaFunction(lambda_function))
 
         # CloudWatch alarms
         lambda_error_alarm = cloudwatch.Alarm(
             self,
-            f"MursstLambdaErrorAlarm-{env_suffix}",
+            f"MursstLambdaErrorAlarm-{deploy_config.stage}",
             metric=lambda_function.metric_errors(),
             threshold=1,
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarm_description=f"Alarm when Lambda function encounters errors ({env_suffix})",
-            alarm_name=f"mursst-lambda-error-alarm-{env_suffix}",
+            alarm_description=f"Alarm when Lambda function encounters errors ({deploy_config.stage})",
+            alarm_name=f"mursst-lambda-error-alarm-{deploy_config.stage}",
         )
         lambda_error_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
@@ -125,13 +114,13 @@ class MursstStack(Stack):
 
         lambda_invocation_alarm = cloudwatch.Alarm(
             self,
-            f"MursstLambdaInvocationAlarm-{env_suffix}",
+            f"MursstLambdaInvocationAlarm-{deploy_config.stage}",
             metric=lambda_function.metric_invocations(),
             threshold=1,
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarm_description=f"Alarm when Lambda function is invoked successfully ({env_suffix})",
-            alarm_name=f"mursst-lambda-invocation-alarm-{env_suffix}",
+            alarm_description=f"Alarm when Lambda function is invoked successfully ({deploy_config.stage})",
+            alarm_name=f"mursst-lambda-invocation-alarm-{deploy_config.stage}",
         )
         lambda_invocation_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(notification_topic)
@@ -141,7 +130,7 @@ class MursstStack(Stack):
         notification_topic.grant_publish(lambda_function)
 
         lambda_function.add_permission(
-            f"AllowEventBridgeInvoke-{env_suffix}",
+            f"AllowEventBridgeInvoke-{deploy_config.stage}",
             principal=iam.ServicePrincipal("events.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=daily_rule.rule_arn,
