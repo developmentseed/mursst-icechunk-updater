@@ -6,6 +6,7 @@ from typing import Optional, Dict
 class RuntimeSettings(BaseSettings):
     store_name: str
     icechunk_direct_prefix: str
+    edl_secret_arn: Optional[str] = ""
     run_tests: bool = Field(
         default=True, description="Run expensive data equality tests"
     )
