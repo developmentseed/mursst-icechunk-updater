@@ -21,11 +21,6 @@ class MursstStack(Stack):
 
         # Load ALL settings (runtime + deployment) with validation
         deploy_config = DeploymentSettings()
-        # TODO: Refactor the SECRET_ARN into the environments (as secret?)
-        env_dict = deploy_config.create_lambda_environment()
-        env_dict["SECRET_ARN"] = (
-            "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C"
-        )
 
         # Create or import IAM role for Lambda based on environment variable
         if "LAMBDA_FUNCTION_ROLE" in os.environ:
@@ -66,7 +61,7 @@ class MursstStack(Stack):
             memory_size=deploy_config.lambda_memory_size,
             function_name=f"mursst-icechunk-updater-{deploy_config.stage}",
             # Convert deployment settings to runtime environment variables
-            environment=env_dict,
+            environment=deploy_config.create_lambda_environment(),
         )
 
         # SNS topic

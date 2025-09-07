@@ -35,7 +35,7 @@ def setup_earthdata_credentials() -> None:
         return
 
     logger.debug("Fetching secrets from AWS Secrets Manager")
-    secret_arn = os.environ["SECRET_ARN"]
+    secret_arn = os.environ["EDL_SECRET_ARN"]
     secrets = get_secret_from_aws(secret_arn)
 
     os.environ["EARTHDATA_USERNAME"] = secrets["EARTHDATA_USERNAME"]
