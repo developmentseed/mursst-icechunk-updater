@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from aws_cdk import App, Tags
 from stack import MursstStack
-from src.settings import Settings
+from src.settings import DeploymentSettings
 
-settings = Settings()
+settings = DeploymentSettings()
 
 stack_id = f"{settings.stack_name}-{settings.stage}"
 
