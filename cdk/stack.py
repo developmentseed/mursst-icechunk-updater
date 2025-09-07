@@ -10,7 +10,6 @@ from aws_cdk import (
     aws_events_targets as targets,
     Duration,
 )
-from aws_cdk import aws_ecr_assets as ecr_assets
 from constructs import Construct
 import os
 
@@ -44,14 +43,33 @@ class MursstStack(Stack):
                 ],
             )
 
+        # # Lambda function (Ship Container Image, currently blocked by permissions)
+        # lambda_function = _lambda.DockerImageFunction(
+        #     self,
+        #     f"MursstIcechunkUpdater-{env_suffix}",
+        #     code=_lambda.DockerImageCode.from_image_asset(
+        #         directory=os.path.abspath("."),
+        #         file="src/Dockerfile",
+        #         platform=ecr_assets.Platform.LINUX_AMD64,
+        #     ),
+        #     role=lambda_role,
+        #     environment={
+        #         "SECRET_ARN": "arn:aws:secretsmanager:us-west-2:444055461661:secret:mursst_lambda_edl_credentials-9dKy1C",
+        #     },
+        #     timeout=Duration.seconds(600),
+        #     memory_size=1024,
+        #     function_name=f"mursst-icechunk-updater-{env_suffix}",
+        # )
         # Lambda function
-        lambda_function = _lambda.DockerImageFunction(
+        lambda_function = _lambda.Function(
             self,
             f"MursstIcechunkUpdater-{env_suffix}",
-            code=_lambda.DockerImageCode.from_image_asset(
-                directory=os.path.abspath("."),
-                file="src/Dockerfile",
-                platform=ecr_assets.Platform.LINUX_AMD64,
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler="lambda_function.lambda_handler",
+            code=_lambda.Code.from_docker_build(
+                path=os.path.abspath("."),
+                file="src/Dockerfile",  # Create this file
+                platform="linux/amd64",
             ),
             role=lambda_role,
             environment={
