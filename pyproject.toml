@@ -1,0 +1,47 @@
+[project]
+name = "mursst-icechunk-updater"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.38.46",
+    "dask>=2025.7.0",
+    "earthaccess>=0.13.0",
+    "h5netcdf>=1.6.3",
+    "icechunk>=1.0.0",
+    "pydantic-settings>=2.10.1",
+    "requests>=2.25.0",
+    "virtualizarr>=2.0.0",
+    "zarr>=3.1.0",
+]
+
+[dependency-groups]
+deploy= [
+    "aws-cdk-lib==2.181.1",
+    "constructs>=10.0.0,<11.0.0"
+]
+dev = [
+    "ipykernel>=6.30.0",
+    "pre-commit>=4.2.0",
+    "pytest>=8.4.1",
+    "lithops>=3.6.1",
+    "aws-sam-cli>=1.142.1",
+    "aws-cdk-cli>=2.1025.0",
+]
+notebook = [
+    "matplotlib>=3.10.5",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+addopts = "-vv"
+testpaths = [
+    "tests"
+]

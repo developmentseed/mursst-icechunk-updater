@@ -4,15 +4,161 @@ Code for writing to an Icechunk store using CMR subscriptions and other AWS serv
 
 ## Background
 
-https://wiki.earthdata.nasa.gov/display/CMR/CMR+Ingest+Subscriptions
-https://cmr.earthdata.nasa.gov/ingest/site/docs/ingest/api.html#subscription
 
-## Prerequisites
+## Example
+
+This snippet shows how to open the store and make a first plot
+
+```python
+import icechunk as ic
+from icechunk.credentials import S3StaticCredentials
+from datetime import datetime
+from urllib.parse import urlparse
+import earthaccess
+import xarray as xr
+
+store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
+store_url_parsed = urlparse(store_url)
+
+storage = ic.s3_storage(
+    bucket = store_url_parsed.netloc,
+    prefix = store_url_parsed.path,
+    from_env=True,
+)
+
+def get_icechunk_creds(daac: str = None) -> S3StaticCredentials:
+    if daac is None:
+        daac = "PODAAC"  # TODO: Might want to change this for a more general version
+        # https://github.com/nsidc/earthaccess/discussions/1051 could help here.
+    # assumes that username and password are available in the environment
+    # TODO: accomodate rc file?
+    auth = earthaccess.login(strategy="environment")
+    if not auth.authenticated:
+        raise PermissionError("Could not authenticate using environment variables")
+    creds = auth.get_s3_credentials(daac=daac)
+    return S3StaticCredentials(
+        access_key_id=creds["accessKeyId"],
+        secret_access_key=creds["secretAccessKey"],
+        expires_after=datetime.fromisoformat(creds["expiration"]),
+        session_token=creds["sessionToken"],
+    )
+
+
+
+# TODO: Is there a way to avoid double opening? Maybe not super important
+repo = ic.Repository.open(
+    storage=storage,
+)
+# see if reopening works
+repo = ic.Repository.open(
+    storage=storage,
+    authorize_virtual_chunk_access = ic.containers_credentials(
+        {
+            k: ic.s3_refreshable_credentials(
+                    get_credentials=get_icechunk_creds
+                ) for k in repo.config.virtual_chunk_containers.keys()
+        }
+    )
+)
+
+session = repo.readonly_session('main')
+ds = xr.open_zarr(session.store, zarr_format=3, consolidated=False)
+ds['analysed_sst'].isel(time=0, lon=slice(10000, 12000), lat=slice(10000, 12000)).plot()
+```
+> This has been tested on the NASA VEDA hub.
+
+## Development Guide
+
+### Prerequisites
 
 - Python 3
 - uv
+- Github CLI
 
-## Setup Environemnt
+### Environments
+
+The MURSST updater is using different *stages* which are defined via github repository and environment variables. 
+
+**prod**: Production environment writing to a publicly accessible NASA-VEDA bucket. Changes for this env are only deployed upon a new release.
+
+**staging**: Staging environment that gets changes deployed for any push to main. The store here will closely mirror the prod one, and should not need to be rebuilt frequently.
+
+**dev**: Developer environment writing to a scratch bucket with limite retention. Used for local (or hub based) debugging and testing. See below for instructions on how to delete and rebuilt the temporary store.
+
+
+#### Local setup
+
+You can generate a local dotenv file by using the `scripts/bootstrap_dotenv.sh` script with the name of a stage as input:
+```
+uv run scripts/bootstrap_dotenv.sh <STAGE>
+```
+
+This will generate a `.env.<STAGE>` file which can be used in all following uv commands to define the environment.
+
+```
+uv run --env-file=.env.<STAGE> ...
+```
+
+You can also set the env file as an environment variable (*recommended*): 
+```bash
+export UV_ENV_FILE=.env.<STAGE>
+```
+
+### Testing
+
+>[!WARNING]
+> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub. 
+
+Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
+
+To run the complete set of tests:
+
+```bash
+uv run pytest
+```
+
+### Rebuilding the store from scratch
+To rebuild the store from scratch (will be mostly needed in the `dev` stage due to the 7 day policy of the scratch bucket) run:
+
+```
+uv run python scripts/rebuild_store.py
+```
+>[!NOTE]
+>The script will not rebuild the store up to the latest date for testing purposes. You can modify the stop date in the script as needed (start_date is set by a change in the chunking for now). 
+
+>[!WARN]
+>This will fail if the repository (even if empty) exists. In that case you have to delete the store manually before proceeding.
+
+### Run update logic manually
+To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
+```
+export DRY_RUN=true #do not commit to the main icechunk branch
+```
+
+```
+export RUN_TESTS=false #Omit (expensive) testing
+```
+
+```
+export LIMIT_GRANULES=3
+# only add up to 3 new granules
+```
+
+and then run:
+```bash
+export LOCAL_TEST=true
+uv run python src/lambda_function.py
+```
+
+### GH Actions based deployment
+
+
+
+### Manual Deployment (deprecated)
+
+Regular deployment should happen via github actions but to deploy locally if needed follow these steps
+
+#### Setup Environment
 
 ```
 uv venv --python 3.12
@@ -20,41 +166,15 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-## Set configuration variables
-
-Make sure the settings `config.py` are appropriate for your needs.
-
-Add your configuration:
-
-```sh
-cp config.py.example config.py
-```
-
-## Creating an SQS Queue to receive CMR notifications and creating a subscription for that queue.
-
-`create_queue.py` will create an SQS queue with the necessary policy to receive SNS notifications. This script requires AWS credentials are configured for the target AWS environment.
-
-`subscribe.py` creates a subscription for the queue identified by `queue_arn.txt` (created by `create_queue.py`) to receive CMR granule notifications for the `COLLECTION_CONCEPT_ID` in `config.py`. Note this script uses [`earthaccess`](https://earthaccess.readthedocs.io) to create a bearer token to pass in the subscription request, so you will need to have earthdata login credentials in ~/.netrc or be ready type them when prompted.
-
-Setting up the queue and associated subscription are one-time operations so there is no reason to manage them in the infrastructure lifecycle of say, a CDK app (deleting the stack would delete the queue, for example). 
-
-```sh
-# Ensure proper AWS credentials are set
-# Create a queue
-python ./create_queue.py
-# Create a subscription for the queue to receive notifications about new collection granules
-python ./subscribe.py
-```
-
-## Looking up your subscription in CMR
-
-1. Get a bearer token from https://urs.earthdata.nasa.gov/users/aimeeb/user_tokens
-2. Use the bearer token in an Authorization header when making a request to https://cmr.earthdata.nasa.gov/search/subscriptions
-3. Use the bearer token to make a request to the URL wrapped in the `<location>` tag in the response from (2).
-
-Note also that the `name` of the subscription will be `<SUBSCRIBER_ID>-<COLLECTION_CONCEPT_ID>-subscription` using the values set in config.py. 
-
-## Deploying the lambda for processing notifications
+#### Deploying the lambda for processing notifications
 
 See `cdk/README.md`.
+
+### Using uv with jupyter lab
+```
+uv sync
+uv run bash
+python -m ipykernel install --user --name=mursstvenv --display-name="MURSST-VENV"
+```
+After refreshing your browser window you should be able to select the "MURSST-VENV" kernel from the upper right corner of the jupyter lab notebook interface.
 

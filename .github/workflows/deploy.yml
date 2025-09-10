@@ -1,0 +1,78 @@
+name: Deploy
+# copied more or less 1:1 from https://github.com/NASA-IMPACT/hls-vi-historical-orchestration/blob/main/.github/workflows/deploy.yml
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      PYTHON_VERSION:
+        required: true
+        type: string
+
+env:
+  AWS_DEFAULT_REGION: us-west-2
+
+defaults:
+  run:
+    shell: bash
+
+# See https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services#updating-your-github-actions-workflow
+permissions:
+  id-token: write # required for requesting the JWT
+  contents: read # required for actions/checkout
+
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "${{ inputs.PYTHON_VERSION }}"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Install deploy requirements
+        run: |
+          uv sync --group deploy
+          npm install -g aws-cdk@v2.*
+          cdk --version
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME_ARN }}
+          role-session-name: ${{ github.actor }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      # - name: Convert secrets to environment variables
+      #   env:
+      #     SECRETS_JSON: ${{ toJson(secrets) }}
+      #   run: |
+      #     while read -rd $'' line; do
+      #       echo "$line" >> $GITHUB_ENV
+      #     done < <(
+      #       jq -r <<<"$SECRETS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
+      #     )
+
+      - name: Convert vars to environment variables
+        env:
+          VARS_JSON: ${{ toJson(vars) }}
+        run: |
+          while read -rd $'' line; do
+            echo "$line" >> $GITHUB_ENV
+          done < <(
+            jq -r <<<"$VARS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
+          )
+
+      - name: Deploy to ${{ inputs.environment }}
+        run: uv run cdk deploy --require-approval never

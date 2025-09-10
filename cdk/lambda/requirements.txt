@@ -1,7 +1,0 @@
-dask
-earthaccess>=0.13.0
-icechunk==0.2.15
-zarr==3.0.8
-requests>=2.25.0
-virtualizarr==1.3.2
-h5netcdf

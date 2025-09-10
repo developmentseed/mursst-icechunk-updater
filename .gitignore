@@ -13,3 +13,13 @@ cdk.out
 queue_arn.txt
 config.py
 *.ipynb_checkpoints/
+cdk/lambda/temp_requirements
+temp-requirements.txt
+cdk/env.json
+.gitignore
+cdk/events/event.json
+test_export
+
+# don't commit dotenv files
+.env*
+.DS_Store
