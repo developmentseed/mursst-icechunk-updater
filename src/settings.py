@@ -31,7 +31,7 @@ class DeploymentSettings(RuntimeSettings):
     stage: str
     aws_region: str = Field(default="us-west-2", description="AWS region")
     lambda_memory_size: int = Field(default=1024, description="Lambda memory in MB")
-    lambda_timeout_seconds: int = Field(default=1200, description="Lambda timeout in s")
+    lambda_timeout_seconds: int = Field(default=600, description="Lambda timeout in s")
 
     # Email for notifications
     notification_email: str = Field(
