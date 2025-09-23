@@ -15,10 +15,10 @@ def full_vdataset():
 
     # Use a generous time range and then cull to the latest 2 available
     start_date = (
-        datetime.now(timezone.utc) - timedelta(days=6)
+        datetime.now(timezone.utc) - timedelta(days=8)
     ).date().isoformat() + " 21:00:00"
     end_date = (
-        datetime.now(timezone.utc) - timedelta(days=3)
+        datetime.now(timezone.utc) - timedelta(days=5)
     ).date().isoformat() + " 21:00:00"
 
     vds = updater.dataset_from_search(
