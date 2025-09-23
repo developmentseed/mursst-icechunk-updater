@@ -25,6 +25,7 @@ from virtualizarr import open_virtual_mfdataset
 from virtualizarr.parsers import HDFParser
 from virtualizarr.registry import ObjectStoreRegistry
 from obstore.store import S3Store
+from obstore.auth.earthdata import NasaEarthdataCredentialProvider
 from icechunk import S3StaticCredentials
 
 
@@ -36,6 +37,53 @@ logger.setLevel(logging.DEBUG)
 COLLECTION_SHORT_NAME = "MUR-JPL-L4-GLOB-v4.1"
 DROP_VARS = ["dt_1km_data", "sst_anomaly"]
 EXAMPLE_TARGET_URL = "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/20250702090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-GLOB-v02.0-fv04.1.nc"
+
+
+# custom logic to aggregate metadata for concat of timesteps
+def combine_attrs(dicts, context):
+    def make_hashable(value):
+        """Convert value to hashable form for set operations"""
+        if isinstance(value, list):
+            return tuple(value)
+        return value
+
+    combined_attrs = {}
+    # Get keys from first dict as reference
+    all_keys = set(dicts[0].keys())
+    # Check that every key exists in all dicts
+    for i, d in enumerate(dicts[1:], 1):
+        if set(d.keys()) != all_keys:
+            missing = all_keys - set(d.keys())
+            extra = set(d.keys()) - all_keys
+            raise KeyError(f"Dict {i} key mismatch. Missing: {missing}, Extra: {extra}")
+    # TODO: I am dropping these because they are file specific info
+    # It would be interesting to see if we could expose them in the
+    # store attributes as a mapping to the original file, or even
+    # the chunks?
+    drop_keys = set(["date_created", "comment"])
+    combine_keys = all_keys - drop_keys
+    for key in combine_keys:
+        values = [d[key] for d in dicts]
+        print(f"DEBUG: {key=} {values=}")
+        unique_values = set(
+            make_hashable(v) for v in values
+        )  # Convert to hashable for set
+        if len(unique_values) == 1:
+            # All values are the same
+            combined_attrs[key] = values[0]  # Use original value, not hashable version
+        else:
+            if key == "start_time":
+                combined_attrs[key] = min(values)
+            elif key == "stop_time":
+                combined_attrs[key] = max(values)
+            elif key == "time_coverage_start":
+                combined_attrs[key] = min(values)
+            elif key == "time_coverage_end":
+                combined_attrs[key] = min(values)
+            else:
+                raise ValueError(f"No instructions provided how to handle {key=}")
+            print(f"DEBUG: {combined_attrs[key]}")
+    return combined_attrs
 
 
 class MursstUpdater:
@@ -64,17 +112,6 @@ class MursstUpdater:
             }
         )
 
-    def get_obstore_credentials(self):
-        """Get obstore credentials from earthaccess."""
-        auth = earthaccess.login(strategy="environment")
-        creds = auth.get_s3_credentials(daac="PODAAC")
-        return {
-            "access_key_id": creds["accessKeyId"],
-            "secret_access_key": creds["secretAccessKey"],
-            "token": creds["sessionToken"],
-            "expires_at": datetime.fromisoformat(creds["expiration"]),
-        }
-
     def obstore_and_registry_from_url(
         self, url: str
     ) -> Tuple[S3Store, ObjectStoreRegistry]:
@@ -85,7 +122,9 @@ class MursstUpdater:
         bucket = parsed.netloc
         logger.debug(f"Using bucket: {bucket}")
 
-        cp = self.get_obstore_credentials
+        # cp = self.get_obstore_credentials
+        credentials_url = "https://archive.podaac.earthdata.nasa.gov/s3credentials"
+        cp = NasaEarthdataCredentialProvider(credentials_url)
         logger.debug(f"Using credential provider: {cp}")
         store = S3Store(bucket=bucket, region="us-west-2", credential_provider=cp)
         logger.debug(f"Created S3Store: {store}")
@@ -230,22 +269,19 @@ class MursstUpdater:
         def preprocess(ds: xr.Dataset) -> xr.Dataset:
             return ds.drop_vars(DROP_VARS, errors="ignore")
 
+        common_kwargs = dict(
+            preprocess=preprocess,
+            parallel=parallel,
+            combine_attrs=combine_attrs,
+        )
+
         if virtual:
             return open_virtual_mfdataset(
-                data_urls,
-                registry=registry,
-                parser=parser,
-                preprocess=preprocess,
-                parallel=parallel,
+                data_urls, registry=registry, parser=parser, **common_kwargs
             )
         else:
             fileset = earthaccess.open(data_urls, provider="POCLOUD")
-            return xr.open_mfdataset(
-                fileset,
-                preprocess=preprocess,
-                chunks={},
-                parallel=True,
-            )
+            return xr.open_mfdataset(fileset, chunks={}, **common_kwargs)
 
     def get_timestep_from_ds(self, ds: xr.Dataset, nt: str) -> datetime:
         """Get timestep from dataset."""
