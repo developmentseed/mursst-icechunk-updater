@@ -6,9 +6,9 @@
 # run with `uv run --env-file .env.<STAGE> python scripts/rebuild_store.py`, see readme for more information.
 
 from src.updater import MursstUpdater
-from src.lambda_function import Settings, get_store_url
+from src.lambda_function import RuntimeSettings, get_store_url
 
-settings = Settings()
+settings = RuntimeSettings()
 
 updater = MursstUpdater()
 
@@ -24,7 +24,7 @@ repo = updater.open_icechunk_repo(store_url)
 
 # Get data and combine into virtual dataset
 start_date = "2024-06-01 21:00:01"  # In my manual testing this was the earliest I could go without hitting: ValueError: Cannot concatenate arrays with inconsistent chunk shapes: (1, 1023, 2047) vs (1, 3600, 7200) .Requires ZEP003 (Variable-length Chunks).
-end_date = "2025-08-10 21:00:00"
+end_date = "2025-09-10 21:00:00"
 
 # create a virtual dataset from search
 vds = updater.dataset_from_search(start_date, end_date, virtual=True)
