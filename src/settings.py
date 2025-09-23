@@ -31,7 +31,7 @@ class DeploymentSettings(RuntimeSettings):
     stage: str
     aws_region: str = Field(default="us-west-2", description="AWS region")
     lambda_memory_size: int = Field(default=1024, description="Lambda memory in MB")
-    lambda_timeout_seconds: int = Field(default=1200, description="Lambda timeout in s")
+    lambda_timeout_seconds: int = Field(default=600, description="Lambda timeout in s")
 
     # Email for notifications
     notification_email: str = Field(
@@ -50,7 +50,8 @@ class DeploymentSettings(RuntimeSettings):
         lambda_env = {}
         for field_name in runtime_field_names:
             value = getattr(self, field_name)
-            env_var_name = field_name.upper()
-            lambda_env[env_var_name] = str(value) if value is not None else ""
+            if value is not None:  # only include non-None
+                env_var_name = field_name.upper()
+                lambda_env[env_var_name] = str(value)
 
         return lambda_env

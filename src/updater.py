@@ -165,17 +165,33 @@ class MursstUpdater:
         prefix = urlunparse(new_parsed) + "/"
         return prefix
 
+    def search_valid_granules(self, start_date: str, end_date: str):
+        """Search and filter granules to only include final processed versions"""
+        logger.info(f"Searching for granules between {start_date} and {end_date}")
+        granules = earthaccess.search_data(
+            temporal=(start_date, end_date), short_name=COLLECTION_SHORT_NAME
+        )
+        files = earthaccess.open(granules)
+
+        def is_reprocessed(ds: xr.Dataset) -> bool:
+            if "replaced nrt (1-day latency) version." in ds.attrs["history"]:
+                return True
+            else:
+                return False
+
+        final_processing_granules = [
+            g for g, f in zip(granules, files) if is_reprocessed(xr.open_dataset(f))
+        ]
+        return final_processing_granules
+
     def find_granules(
         self, start_date: str, end_date: str, limit_granules: int = None
     ) -> list[DataGranule]:
         """Find granules within date range."""
-        logger.info(f"Searching for granules between {start_date} and {end_date}")
-        granule_results = earthaccess.search_data(
-            temporal=(start_date, end_date), short_name=COLLECTION_SHORT_NAME
-        )
+        granule_results = self.search_valid_granules(start_date, end_date)
 
         if len(granule_results) == 0:
-            logger.warning("No granules found")
+            logger.warning("No valid granules found")
             return None
         else:
             logger.info(f"Number of granules found: {len(granule_results)}")
