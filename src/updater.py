@@ -39,12 +39,26 @@ DROP_VARS = ["dt_1km_data", "sst_anomaly"]
 EXAMPLE_TARGET_URL = "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/20250702090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-GLOB-v02.0-fv04.1.nc"
 
 
-# custom logic to aggregate metadata for concat of timesteps
 def combine_attrs(dicts, context):
     def make_hashable(value):
         """Convert value to hashable form for set operations"""
         if isinstance(value, list):
             return tuple(value)
+        elif hasattr(value, "tolist"):  # Handle numpy arrays and scalars
+            converted = value.tolist()
+            # If tolist() returns a list, convert to tuple; otherwise return as-is
+            if isinstance(converted, list):
+                return tuple(converted)
+            else:
+                return converted
+        elif hasattr(value, "__array__"):  # Handle other array-like objects
+            import numpy as np
+
+            converted = np.asarray(value).tolist()
+            if isinstance(converted, list):
+                return tuple(converted)
+            else:
+                return converted
         return value
 
     combined_attrs = {}
