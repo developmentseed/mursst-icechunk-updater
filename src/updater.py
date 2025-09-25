@@ -18,7 +18,7 @@ import icechunk
 import boto3
 import os
 from datetime import datetime, timezone
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 import xarray as xr
 from urllib.parse import urlparse, urlunparse
 from virtualizarr import open_virtual_mfdataset
@@ -28,15 +28,19 @@ from obstore.store import S3Store
 from obstore.auth.earthdata import NasaEarthdataCredentialProvider
 from icechunk import S3StaticCredentials
 
-
 # Configure logging for this module
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # Constants
 COLLECTION_SHORT_NAME = "MUR-JPL-L4-GLOB-v4.1"
 DROP_VARS = ["dt_1km_data", "sst_anomaly"]
 EXAMPLE_TARGET_URL = "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/20250702090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-GLOB-v02.0-fv04.1.nc"
+# TODO: I am dropping these because they are file specific info
+# It would be interesting to see if we could expose them in the
+# store attributes as a mapping to the original file, or even
+# the chunks?
+DROP_ATTRS = ["date_created", "comment", "source", "platform", "sensor"]
 
 
 def combine_attrs(dicts, context):
@@ -70,33 +74,45 @@ def combine_attrs(dicts, context):
             missing = all_keys - set(d.keys())
             extra = set(d.keys()) - all_keys
             raise KeyError(f"Dict {i} key mismatch. Missing: {missing}, Extra: {extra}")
-    # TODO: I am dropping these because they are file specific info
-    # It would be interesting to see if we could expose them in the
-    # store attributes as a mapping to the original file, or even
-    # the chunks?
-    drop_keys = set(["date_created", "comment"])
+
+    drop_keys = set(DROP_ATTRS)
     combine_keys = all_keys - drop_keys
+    #
+    same_value_keys = []
+    handled_multi_value_keys = []
+    non_handled_multi_value_keys = []
     for key in combine_keys:
         values = [d[key] for d in dicts]
-        print(f"DEBUG: {key=} {values=}")
         unique_values = set(
             make_hashable(v) for v in values
         )  # Convert to hashable for set
+        logger.debug(f"DEBUG: {key=} {unique_values=}")
         if len(unique_values) == 1:
             # All values are the same
             combined_attrs[key] = values[0]  # Use original value, not hashable version
+            same_value_keys.append(key)
         else:
             if key == "start_time":
                 combined_attrs[key] = min(values)
+                handled_multi_value_keys.append(key)
             elif key == "stop_time":
                 combined_attrs[key] = max(values)
+                handled_multi_value_keys.append(key)
             elif key == "time_coverage_start":
                 combined_attrs[key] = min(values)
+                handled_multi_value_keys.append(key)
             elif key == "time_coverage_end":
-                combined_attrs[key] = min(values)
+                combined_attrs[key] = max(values)
+                handled_multi_value_keys.append(key)
             else:
-                raise ValueError(f"No instructions provided how to handle {key=}")
-            print(f"DEBUG: {combined_attrs[key]}")
+                non_handled_multi_value_keys.append(key)
+
+            if len(non_handled_multi_value_keys) > 0:
+                raise ValueError(
+                    f"No instructions provided how to handle {non_handled_multi_value_keys=}"
+                )
+            logger.info(f"Constant keys: {same_value_keys}")
+            logger.info(f"Manually combined keys: {handled_multi_value_keys}")
     return combined_attrs
 
 
@@ -238,40 +254,32 @@ class MursstUpdater:
         return final_processing_granules
 
     def find_granules(
-        self, start_date: str, end_date: str, limit_granules: int = None
+        self, start_date: str, end_date: str, limit_granules: Optional[int] = None
     ) -> list[DataGranule]:
         """Find granules within date range."""
         logger.info(f"Searching for granules between {start_date} and {end_date}")
+        logger.debug(f"{limit_granules=}")
         granule_results = self.search_valid_granules(start_date, end_date)
 
-        if len(granule_results) == 0:
-            logger.warning("No valid granules found")
-            return None
-        else:
-            logger.info(f"Number of granules found: {len(granule_results)}")
-            if limit_granules is not None:
-                logger.info(f"Limiting the number of granules to {limit_granules}")
-                return granule_results[:limit_granules]
-            else:
-                return granule_results
+        if limit_granules is not None:
+            logger.info(f"Limiting the number of granules to {limit_granules}")
+            granule_results = granule_results[:limit_granules]
 
-    def dataset_from_search(
+        if len(granule_results) == 0:
+            raise ValueError("No new data granules available")
+        else:
+            logger.info(f"Number of valid granules found: {len(granule_results)}")
+            return granule_results
+
+    def dataset_from_granules(
         self,
-        start_date: str,
-        end_date: str,
-        virtual=True,
-        limit_granules: int = None,
-        parallel="lithops",
+        granule_results: list[DataGranule],
+        virtual: bool = True,
+        parallel: Optional[str] = "lithops",
         access: str = "direct",
     ) -> xr.Dataset:
         """Create dataset from granule search."""
-        logger.debug(f"{limit_granules=}")
-        granule_results = self.find_granules(
-            start_date, end_date, limit_granules=limit_granules
-        )
-        if granule_results is None or len(granule_results) == 0:
-            raise ValueError("No new data granules available")
-
+        logger.info("Creating Dataset from Granules")
         in_region = True if access == "direct" else False
         data_urls = [
             g.data_links(access=access, in_region=in_region)[0] for g in granule_results
@@ -290,10 +298,12 @@ class MursstUpdater:
         )
 
         if virtual:
+            logger.info("Returning virtual dataset")
             return open_virtual_mfdataset(
                 data_urls, registry=registry, parser=parser, **common_kwargs
             )
         else:
+            logger.info("Returning non-virtual dataset")
             fileset = earthaccess.open(data_urls, provider="POCLOUD")
             return xr.open_mfdataset(fileset, chunks={}, **common_kwargs)
 
@@ -307,52 +317,110 @@ class MursstUpdater:
         ds = xr.open_zarr(session.store, consolidated=False)
         return ds
 
-    def test_store_on_branch(
-        self, ds_new: xr.Dataset, ds_expected: xr.Dataset
-    ) -> Tuple[bool, str]:
-        """Test data integrity on branch."""
-        logger.info("Starting Tests")
-        nt = len(ds_expected.time)
+    def test_new_data(self, ds_old, ds_new, new_granules):
+        logger.info("Starting comprehensive dataset validation tests")
+        errors = []
 
-        # Test 1: time continuity
-        logger.info("Testing Time continuity")
-        try:
-            dt_expected = ds_new.time.isel(time=slice(0, 1)).diff("time")
-            dt_actual = ds_new.isel(time=slice(-(nt + 1), None)).time.diff("time")
-            time_continuity = (dt_actual == dt_expected).all().item()
-        except Exception as e:
-            time_continuity = False
-            time_continuity_error = str(e)
-        else:
-            time_continuity_error = None
+        # Time continuity check
+        logger.info("Checking time continuity...")
+        dt_actual = ds_new.time.diff("time")
+        dt_expected = ds_new.isel(time=slice(0, 1)).time.diff("time")
+        time_continuity = (dt_actual == dt_expected).all().item()
+        if not time_continuity:
+            errors.append(
+                "Time intervals are not consistent across the dataset. Expected uniform time steps but found irregular intervals."
+            )
 
-        # Test 2: data equality
-        logger.info("Testing Data equality")
-        try:
-            xr.testing.assert_allclose(ds_expected, ds_new.isel(time=slice(-nt, None)))
-            data_equal = True
-        except AssertionError as e:
-            data_equal = False
-            data_equal_error = str(e)
-        except Exception as e:
-            data_equal = False
-            data_equal_error = f"Unexpected error during data comparison: {e}"
-        else:
-            data_equal_error = None
+        # Append consistency with granules
+        logger.info("Validating granule count consistency...")
+        expected_new_timesteps = len(new_granules)
+        actual_new_timesteps = len(ds_new.time) - len(ds_old.time)
+        if actual_new_timesteps != expected_new_timesteps:
+            errors.append(
+                f"Granule count mismatch: expected {expected_new_timesteps} new time steps but found {actual_new_timesteps}. "
+                f"Original dataset had {len(ds_old.time)} timesteps, new dataset has {len(ds_new.time)} timesteps."
+            )
 
-        # Compose result
-        tests_passed = time_continuity and data_equal
+        # Check attributes that should remain equal
+        logger.info("Checking attributes that should remain unchanged...")
+        check_equal_attrs = ["start_time", "time_coverage_start"]
+        changed_equal_attrs = []
+        for attr in check_equal_attrs:
+            if attr not in ds_old.attrs:
+                errors.append(
+                    f"Required attribute '{attr}' is missing from original dataset."
+                )
+            elif attr not in ds_new.attrs:
+                errors.append(
+                    f"Required attribute '{attr}' is missing from new dataset."
+                )
+            elif ds_new.attrs[attr] != ds_old.attrs[attr]:
+                changed_equal_attrs.append(
+                    f"'{attr}': '{ds_old.attrs[attr]}' → '{ds_new.attrs[attr]}'"
+                )
 
-        if not tests_passed:
-            error_message = "Failures:\n"
-            if not time_continuity:
-                error_message += f"- Time continuity failed: {time_continuity_error or 'Mismatch in timestep differences'}\n"
-            if not data_equal:
-                error_message += f"- Data equality failed: {data_equal_error}\n"
-        else:
-            error_message = None
+        if changed_equal_attrs:
+            errors.append(
+                f"The following attributes should remain unchanged but were modified: {', '.join(changed_equal_attrs)}"
+            )
 
-        return tests_passed, error_message
+        # Check attributes that should have changed
+        logger.info("Checking attributes that should be updated...")
+        check_changed_attrs = ["stop_time", "time_coverage_end"]
+        unchanged_attrs = []
+        for attr in check_changed_attrs:
+            if attr not in ds_old.attrs:
+                errors.append(
+                    f"Expected attribute '{attr}' is missing from original dataset."
+                )
+            elif attr not in ds_new.attrs:
+                errors.append(
+                    f"Expected attribute '{attr}' is missing from new dataset."
+                )
+            elif ds_new.attrs[attr] == ds_old.attrs[attr]:
+                unchanged_attrs.append(f"'{attr}': '{ds_old.attrs[attr]}'")
+
+        if unchanged_attrs:
+            errors.append(
+                f"The following attributes should have been updated but remained unchanged: {', '.join(unchanged_attrs)}"
+            )
+
+        # Check for required attributes presence
+        logger.info("Validating presence of required attributes...")
+        check_presence_attrs = ["publisher_name"]  # TODO: this is incomplete
+        missing_attrs = []
+        for attr in check_presence_attrs:
+            if attr not in ds_new.attrs:
+                missing_attrs.append(attr)
+
+        if missing_attrs:
+            errors.append(
+                f"Required attributes are missing from the new dataset: {', '.join(missing_attrs)}"
+            )
+
+        # Check for attributes that should have been dropped
+        logger.info("Checking for attributes that should have been removed...")
+        unexpected_attrs = []
+        for attr in DROP_ATTRS:
+            if attr in ds_new.attrs:
+                unexpected_attrs.append(attr)
+
+        if unexpected_attrs:
+            errors.append(
+                f"The following attributes should have been removed but are still present: {', '.join(unexpected_attrs)}"
+            )
+
+        # Raise comprehensive error if any issues found
+        if errors:
+            error_summary = (
+                f"Dataset validation failed with {len(errors)} issue(s):\n"
+                + "\n".join(f"  {i + 1}. {error}" for i, error in enumerate(errors))
+            )
+            logger.error(error_summary)
+            raise ValueError(error_summary)
+
+        logger.info("All dataset validation tests passed successfully")
+        return True
 
     def update_icechunk_store(
         self,
@@ -395,12 +463,15 @@ class MursstUpdater:
             tzinfo=timezone.utc,
         ).isoformat(sep=" ")
 
+        # search for new data
+        new_granules = self.find_granules(
+            last_timestep, current_date, limit_granules=limit_granules
+        )
+
         # Search for new data and create a virtual dataset
-        vds = self.dataset_from_search(
-            last_timestep,
-            current_date,
+        vds = self.dataset_from_granules(
+            new_granules,
             virtual=True,
-            limit_granules=limit_granules,
             parallel=parallel,
         )
         logger.debug(f"New Data (Virtual): {vds}")
@@ -413,6 +484,19 @@ class MursstUpdater:
 
         logger.info(f"Writing to icechunk branch {self.branchname}")
         commit_message = f"MUR update {self.branchname}"
+        # Attributes
+        # AFAIKT virtualizarr (and perhaps xarray too?) just update/overwrite the attributes when appending to a store?
+        # TODO:This definitely warrants a more detailed discussion, MRE etc in an issue
+        # For now what I will attempt is to manually update the attrs on the virtual
+        # dataset and then see if those are written to the store.
+        # TODO: Check if I need to do this for each variable too?
+
+        logger.info("Updating attrs")
+        combined_attrs = combine_attrs([ds_main.attrs, vds.attrs], None)
+        logger.info(f"{combined_attrs=}")
+        vds.attrs.update(combined_attrs)
+
+        # Append new data and commit
         session = repo.writable_session(branch=self.branchname)
         vds.vz.to_icechunk(session.store, append_dim="time")
         snapshot = session.commit(commit_message)
@@ -421,28 +505,15 @@ class MursstUpdater:
         )
 
         if run_tests:
-            # Compare data committed and reloaded from granules not using icechunk
-            logger.info("Reloading Dataset from branch")
+            logger.info("Testing new Dataset from branch")
             ds_new = self.open_xr_dataset_from_branch(repo, self.branchname)
             logger.info(f"Dataset on {self.branchname}: {ds_new}")
-
-            logger.info("Building Test Datasets")
-            ds_original = self.dataset_from_search(
-                last_timestep,
-                current_date,
-                virtual=False,
-                access="external",
-                limit_granules=limit_granules,
-            )
-            logger.info(f"Test Dataset: {ds_original}")
-
-            passed, message = self.test_store_on_branch(ds_new, ds_original)
-
-            if not passed:
-                logger.info(f"Tests did not pass with: {message}")
-                return message
-            else:
+            try:
+                self.test_new_data(ds_main, ds_new, new_granules)
                 logger.info("Tests passed.")
+            except Exception as e:
+                logger.error(f"Tests failed with {e}")
+                raise
         else:
             logger.info(f"Got {run_tests=}. Tests skipped.")
 

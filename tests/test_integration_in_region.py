@@ -20,9 +20,12 @@ def full_vdataset():
     end_date = (
         datetime.now(timezone.utc) - timedelta(days=5)
     ).date().isoformat() + " 21:00:00"
+    new_granules = updater.find_granules(start_date, end_date, limit_granules=2)
 
-    vds = updater.dataset_from_search(
-        start_date, end_date, virtual=True, parallel="lithops", limit_granules=2
+    vds = updater.dataset_from_granules(
+        new_granules,
+        virtual=True,
+        parallel="lithops",
     )
     return vds
 
@@ -64,7 +67,7 @@ class TestIntegrationTests:
         # Run the update
         result = updater_instance.update_icechunk_store(
             store_target=temp_icechunk_store,
-            run_tests=False,  # Skip tests for faster execution
+            run_tests=True,  # Skip tests for faster execution
             dry_run=False,
             limit_granules=days_to_append,
             parallel=False,
@@ -81,7 +84,7 @@ class TestIntegrationTests:
         with pytest.raises(ValueError) as exc_info:
             updater_instance.update_icechunk_store(
                 store_target=temp_icechunk_store,
-                run_tests=False,
+                run_tests=True,
                 dry_run=False,
                 limit_granules=0,
                 parallel=False,
@@ -100,7 +103,7 @@ class TestIntegrationTests:
         # Run in dry run mode
         result = updater_instance.update_icechunk_store(
             store_target=temp_icechunk_store,
-            run_tests=False,
+            run_tests=True,
             dry_run=True,  # This should prevent merging to main
             limit_granules=1,
             parallel=False,
