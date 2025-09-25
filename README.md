@@ -22,7 +22,7 @@ store_url_parsed = urlparse(store_url)
 
 storage = ic.s3_storage(
     bucket = store_url_parsed.netloc,
-    prefix = store_url_parsed.path,
+    prefix = store_url_parsed.path.lstrip('/'),
     from_env=True,
 )
 
