@@ -18,7 +18,7 @@ import icechunk
 import boto3
 import os
 from datetime import datetime, timezone
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 import xarray as xr
 from urllib.parse import urlparse, urlunparse
 from virtualizarr import open_virtual_mfdataset
@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Constants
-COLLECTION_SHORT_NAME = "MUR-JPL-L4-GLOB-v4.1"
-DROP_VARS = ["dt_1km_data", "sst_anomaly"]
+# TODO: this shold be determined dynamically in the future
 EXAMPLE_TARGET_URL = "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/20250702090000-JPL-L4_GHRSST-SSTfnd-MUR-GLOB-GLOB-v02.0-fv04.1.nc"
 # TODO: I am dropping these because they are file specific info
 # It would be interesting to see if we could expose them in the
 # store attributes as a mapping to the original file, or even
 # the chunks?
+# TODO, how could I provide these as a kwarg to the combine function?
 DROP_ATTRS = ["date_created", "comment", "source", "platform", "sensor"]
 
 
@@ -122,11 +122,52 @@ class MursstUpdater:
 
     This class encapsulates all the business logic and can be used
     independently of AWS Lambda.
+
+    Parameters
+    ----------
+    store_target : str
+        Target location for the icechunk store. Can be either an S3 URL
+        (e.g., 's3://bucket/path') or a local filesystem path.
+    collection_short_name : str, optional
+        Short name identifier for the data collection to search and process.
+        Default is "MUR-JPL-L4-GLOB-v4.1".
+    drop_vars : list of str or None, optional
+        List of variable names to drop from the dataset during processing.
+        Default is ["dt_1km_data", "sst_anomaly"].
+
+    Attributes
+    ----------
+    repo : icechunk.Repository
+        The icechunk repository instance for data storage operations.
+    store_target : str
+        Target location for the icechunk store.
+    collection_short_name : str
+        Short name identifier for the data collection.
+    drop_vars : list of str or None
+        List of variable names to drop from datasets.
+    branchname : str
+        Auto-generated branch name based on current UTC timestamp.
     """
 
-    def __init__(self):
+    repo: icechunk.Repository
+    store_target: str
+    collection_short_name: str
+    drop_vars: List[None | str]
+
+    def __init__(
+        self,
+        store_target: str,
+        collection_short_name: str = "MUR-JPL-L4-GLOB-v4.1",
+        drop_vars: List[None | str] = ["dt_1km_data", "sst_anomaly"],
+    ):
         """Initialize the updater with current timestamp for branch naming."""
         self.branchname = f"add_time_{datetime.now(timezone.utc).isoformat()}"
+        self.store_target = store_target
+        self.collection_short_name = collection_short_name
+        self.drop_vars = drop_vars
+
+    def setup_repo(self):
+        self.repo = self.open_or_create_icechunk_repo()
 
     def get_container_credentials(
         self, example_url: str
@@ -142,9 +183,8 @@ class MursstUpdater:
             }
         )
 
-    def obstore_and_registry_from_url(
-        self, url: str
-    ) -> Tuple[S3Store, ObjectStoreRegistry]:
+    @staticmethod
+    def obstore_and_registry_from_url(url: str) -> Tuple[S3Store, ObjectStoreRegistry]:
         """Create obstore and registry from URL."""
         logger.info(f"Setting up obstore and registry for url: {url}")
         parsed = urlparse(url)
@@ -152,7 +192,6 @@ class MursstUpdater:
         bucket = parsed.netloc
         logger.debug(f"Using bucket: {bucket}")
 
-        # cp = self.get_obstore_credentials
         credentials_url = "https://archive.podaac.earthdata.nasa.gov/s3credentials"
         cp = NasaEarthdataCredentialProvider(credentials_url)
         logger.debug(f"Using credential provider: {cp}")
@@ -178,7 +217,8 @@ class MursstUpdater:
             session_token=creds["sessionToken"],
         )
 
-    def get_icechunk_storage(self, target: str) -> icechunk.Storage:
+    @staticmethod
+    def get_icechunk_storage(target: str) -> icechunk.Storage:
         """Get icechunk storage configuration."""
         if target.startswith("s3://"):
             logger.info("Defining icechunk storage for s3")
@@ -194,9 +234,10 @@ class MursstUpdater:
             storage = icechunk.local_filesystem_storage(path=target)
         return storage
 
-    def create_icechunk_repo(self, store_target: str) -> None:
-        """Create a new icechunk repository."""
-        storage = self.get_icechunk_storage(store_target)
+    def open_or_create_icechunk_repo(self) -> None:
+        """Open an existing icechunk repository."""
+        logger.info("Opening icechunk repo")
+        storage = self.get_icechunk_storage(self.store_target)
         logger.info(f"{storage=}")
         config = icechunk.RepositoryConfig.default()
         config.set_virtual_chunk_container(
@@ -205,20 +246,8 @@ class MursstUpdater:
                 icechunk.s3_store(region="us-west-2"),
             )
         )
-        icechunk.Repository.create(
-            storage=storage,
+        repo = icechunk.Repository.open_or_create(
             config=config,
-            authorize_virtual_chunk_access=self.get_container_credentials(
-                EXAMPLE_TARGET_URL
-            ),
-        )
-
-    def open_icechunk_repo(self, store_target: str) -> icechunk.Repository:
-        """Open an existing icechunk repository."""
-        logger.info("Opening icechunk repo")
-        storage = self.get_icechunk_storage(store_target)
-
-        repo = icechunk.Repository.open(
             storage=storage,
             authorize_virtual_chunk_access=self.get_container_credentials(
                 EXAMPLE_TARGET_URL
@@ -238,7 +267,7 @@ class MursstUpdater:
         """Search and filter granules to only include final processed versions"""
         logger.info(f"Searching for granules between {start_date} and {end_date}")
         granules = earthaccess.search_data(
-            temporal=(start_date, end_date), short_name=COLLECTION_SHORT_NAME
+            temporal=(start_date, end_date), short_name=self.collection_short_name
         )
         files = earthaccess.open(granules)
 
@@ -289,7 +318,7 @@ class MursstUpdater:
         parser = HDFParser()
 
         def preprocess(ds: xr.Dataset) -> xr.Dataset:
-            return ds.drop_vars(DROP_VARS, errors="ignore")
+            return ds.drop_vars(self.drop_vars, errors="ignore")
 
         common_kwargs = dict(
             preprocess=preprocess,
@@ -311,15 +340,44 @@ class MursstUpdater:
         """Get timestep from dataset."""
         return ds.time.data[nt].astype("datetime64[ms]").astype(datetime)
 
-    def open_xr_dataset_from_branch(self, repo: icechunk.Repository, branch: str):
+    def open_xr_dataset_from_branch(self, branch: str):
         """Open xarray dataset from icechunk branch."""
-        session = repo.readonly_session(branch=branch)
+        session = self.repo.readonly_session(branch=branch)
         ds = xr.open_zarr(session.store, consolidated=False)
         return ds
 
-    def test_new_data(self, ds_old, ds_new, new_granules):
+    @staticmethod
+    def get_filenames_from_granules(granule_results: list[DataGranule]):
+        paths = [g.data_links()[0] for g in granule_results]
+        filenames = [os.path.basename(path) for path in paths]
+        return filenames
+
+    def get_filenames_from_virtual_chunks(self, branch):
+        session = self.repo.readonly_session(branch)
+        vchunks_locations = set(session.all_virtual_chunk_locations())
+        filenames = [os.path.basename(path) for path in vchunks_locations]
+        return filenames
+
+    def test_new_data(self, ds_old, new_granules):
         logger.info("Starting comprehensive dataset validation tests")
         errors = []
+
+        # Check that virtual references contain all files in query
+        files_granules = self.get_filenames_from_granules(new_granules)
+        files_branch = self.get_filenames_from_virtual_chunks(self.branchname)
+        missing_files = []
+        for file in files_granules:
+            if file not in files_branch:
+                missing_files.append(file)
+
+        if len(missing_files) > 0:
+            raise ValueError(
+                f"Did not find all files from the granules on new branch. {missing_files=}"
+            )
+
+        # load dataset on current branch
+        ds_new = self.open_xr_dataset_from_branch(self.branchname)
+        logger.info(f"Dataset on {self.branchname}: {ds_new}")
 
         # Time continuity check
         logger.info("Checking time continuity...")
@@ -424,7 +482,6 @@ class MursstUpdater:
 
     def update_icechunk_store(
         self,
-        store_target: str,
         run_tests: bool = True,
         dry_run: bool = False,
         limit_granules: int = None,
@@ -433,21 +490,15 @@ class MursstUpdater:
         """
         Main method to update the icechunk store with new data.
 
-        Args:
-            store_target: URL or path to the icechunk store
-            run_tests: Whether to run data validation tests
-            dry_run: Whether to skip the final merge to main
-            limit_granules: Limit number of granules to process
-            parallel: Parallelization method for virtualizarr
-
         Returns:
             Status message or error details
         """
-        repo = self.open_icechunk_repo(store_target)
+        # setup the repo
+        self.setup_repo()
 
         # Find the timerange that is new
         logger.info("Finding dates to append to existing store")
-        ds_main = self.open_xr_dataset_from_branch(repo, "main")
+        ds_main = self.open_xr_dataset_from_branch("main")
 
         # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
         last_date = self.get_timestep_from_ds(ds_main, -1).date()
@@ -477,10 +528,10 @@ class MursstUpdater:
         logger.debug(f"New Data (Virtual): {vds}")
 
         # Write to the icechunk store
-        main_snapshot = repo.lookup_branch("main")
+        main_snapshot = self.repo.lookup_branch("main")
         logger.debug(f"Latest main snapshot: {main_snapshot}")
         logger.info(f"Creating branch: {self.branchname}")
-        repo.create_branch(self.branchname, snapshot_id=main_snapshot)
+        self.repo.create_branch(self.branchname, snapshot_id=main_snapshot)
 
         logger.info(f"Writing to icechunk branch {self.branchname}")
         commit_message = f"MUR update {self.branchname}"
@@ -497,7 +548,7 @@ class MursstUpdater:
         vds.attrs.update(combined_attrs)
 
         # Append new data and commit
-        session = repo.writable_session(branch=self.branchname)
+        session = self.repo.writable_session(branch=self.branchname)
         vds.vz.to_icechunk(session.store, append_dim="time")
         snapshot = session.commit(commit_message)
         logger.info(
@@ -506,10 +557,8 @@ class MursstUpdater:
 
         if run_tests:
             logger.info("Testing new Dataset from branch")
-            ds_new = self.open_xr_dataset_from_branch(repo, self.branchname)
-            logger.info(f"Dataset on {self.branchname}: {ds_new}")
             try:
-                self.test_new_data(ds_main, ds_new, new_granules)
+                self.test_new_data(ds_main, new_granules)
                 logger.info("Tests passed.")
             except Exception as e:
                 logger.error(f"Tests failed with {e}")
@@ -522,7 +571,7 @@ class MursstUpdater:
             return f"Dry run completed successfully. Branch {self.branchname} created but not merged."
         else:
             logger.info(f"Merging {self.branchname} into main")
-            repo.reset_branch("main", repo.lookup_branch(self.branchname))
+            self.repo.reset_branch("main", self.repo.lookup_branch(self.branchname))
             return f"Successfully updated store and merged {self.branchname} to main"
 
 

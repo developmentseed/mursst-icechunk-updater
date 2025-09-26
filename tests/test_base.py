@@ -4,12 +4,13 @@ from src.updater import MursstUpdater, combine_attrs
 from src.lambda_function import get_store_url
 import numpy as np
 import xarray as xr
+import icechunk as ic
 
 
 @pytest.fixture()
-def updater_instance():
+def updater_instance(tmp_path):
     """Create a MursstUpdater instance for testing."""
-    return MursstUpdater()
+    return MursstUpdater(str(tmp_path / "base_temp_store"))
 
 
 class TestMursstUpdater:
@@ -22,8 +23,16 @@ class TestMursstUpdater:
 
     def test_persistent_virt_container_config(self, tmp_path, updater_instance):
         """Making sure that the chunk containers are persisted to storage"""
-        updater_instance.create_icechunk_repo(str(tmp_path))
-        repo = updater_instance.open_icechunk_repo(str(tmp_path))
+        updater_instance.setup_repo()
+        ## first assert that we have virtual chunk containers in class attribute repo
+        assert (
+            "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/"
+            in updater_instance.repo.config.virtual_chunk_containers.keys()
+        )
+        # reopen the repo with vanilla icechunk and confirm that this info is persisted into storage
+        repo = ic.Repository.open(
+            storage=updater_instance.get_icechunk_storage(updater_instance.store_target)
+        )
         assert (
             "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/"
             in repo.config.virtual_chunk_containers.keys()
