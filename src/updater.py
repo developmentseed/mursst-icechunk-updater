@@ -317,8 +317,10 @@ class MursstUpdater:
         store, registry = self.obstore_and_registry_from_url(EXAMPLE_TARGET_URL)
         parser = HDFParser()
 
+        drop_vars = self.drop_vars
+
         def preprocess(ds: xr.Dataset) -> xr.Dataset:
-            return ds.drop_vars(self.drop_vars, errors="ignore")
+            return ds.drop_vars(drop_vars, errors="ignore")
 
         common_kwargs = dict(
             preprocess=preprocess,
@@ -485,7 +487,8 @@ class MursstUpdater:
         run_tests: bool = True,
         dry_run: bool = False,
         limit_granules: int = None,
-        parallel: str = "lithops",
+        # parallel: str = "lithops",
+        parallel: str = None,
     ) -> str:
         """
         Main method to update the icechunk store with new data.
