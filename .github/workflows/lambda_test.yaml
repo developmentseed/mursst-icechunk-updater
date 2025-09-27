@@ -44,7 +44,7 @@ jobs:
         echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
         
         # Invoke Lambda
-        if aws lambda invoke \
+        aws lambda invoke \
           --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
           --payload '{}' \
           --region ${{ env.AWS_REGION }} \
@@ -52,36 +52,79 @@ jobs:
           --cli-connect-timeout 60 \
           response1.json; then
           
-          echo "✅ Lambda invocation successful"
-          echo "Response:"
-          cat response1.json
-        else
-          echo "❌ Lambda invocation failed - fetching logs..."
-          
-          # Get the latest log stream
-          LATEST_STREAM=$(aws logs describe-log-streams \
-            --log-group-name "/aws/lambda/${{ env.LAMBDA_FUNCTION_NAME }}" \
-            --order-by LastEventTime \
-            --descending \
-            --max-items 1 \
+        echo "✅ Lambda invocation successful"
+        echo "Response:"
+        cat response1.json
+
+    - name: Extract Lambda logs after successful invocation
+      if: success()
+      run: |
+        echo "📥 Extracting Lambda execution logs..."
+        
+        # Wait a moment for logs to be available
+        sleep 10
+        
+        # Get the most recent log stream
+        LATEST_STREAM=$(aws logs describe-log-streams \
+          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+          --order-by LastEventTime \
+          --descending \
+          --max-items 1 \
+          --region ${{ env.AWS_REGION }} \
+          --query 'logStreams[0].logStreamName' \
+          --output text)
+        
+        echo "Latest log stream: $LATEST_STREAM"
+        
+        # Extract the logs
+        aws logs get-log-events \
+          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+          --log-stream-name "$LATEST_STREAM" \
+          --region ${{ env.AWS_REGION }} \
+          --query 'events[*].message' \
+          --output text > lambda_execution.log
+        
+        echo "📋 Lambda execution logs:"
+        cat lambda_execution.log
+    
+    - name: Upload Lambda logs as artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lambda-logs
+        path: lambda_execution.log
+        
+  monitor-lambda:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ env.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Run Lambda asynchronously and tail logs
+      run: |
+          # Tail logs with timeout using background process and timeout command
+          timeout 600s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
+            --follow \
             --region ${{ env.AWS_REGION }} \
-            --query 'logStreams[0].logStreamName' \
-            --output text)
+            --since "$START_TIME" || {
+            exit_code=$?
+            if [ $exit_code -eq 124 ]; then
+              echo ""
+              echo "⏰ Log tailing stopped after 10 minutes timeout"
+            else
+              echo ""
+              echo "❌ Log tailing failed with exit code: $exit_code"
+              exit 1
+            fi
+          }
           
-          echo "Latest log stream: $LATEST_STREAM"
-          
-          # Get the log events
-          if [ "$LATEST_STREAM" != "None" ] && [ "$LATEST_STREAM" != "" ]; then
-            echo "Recent log events:"
-            aws logs get-log-events \
-              --log-group-name "/aws/lambda/${{ env.LAMBDA_FUNCTION_NAME }}" \
-              --log-stream-name "$LATEST_STREAM" \
-              --region ${{ env.AWS_REGION }} \
-              --query 'events[*].message' \
-              --output text
-          else
-            echo "No log streams found"
-          fi
-          
-          exit 1
-        fi
+          echo ""
+          echo "✅ Log tailing completed"
