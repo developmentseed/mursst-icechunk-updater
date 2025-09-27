@@ -108,7 +108,7 @@ jobs:
         role-to-assume: ${{ env.AWS_ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Run Lambda asynchronously and tail logs
+    - name: Tail Lambda logs
       run: |
           # Tail logs with timeout using background process and timeout command
           timeout 600s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
