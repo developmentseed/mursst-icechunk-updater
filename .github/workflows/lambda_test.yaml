@@ -1,5 +1,5 @@
 # .github/workflows/lambda-test.yml
-name: Lambda Test
+name: Lambda Invokation Test
 
 on:
   workflow_dispatch:  # Manual trigger
