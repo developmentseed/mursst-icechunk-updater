@@ -124,7 +124,7 @@ jobs:
             --follow \
             --region ${{ env.AWS_REGION }} || {
             if [ $? -eq 124 ]; then
-                echo "⏰ Log tailing stopped after 10 minutes timeout"
+                echo "⏰ Log tailing stopped after 1 minutes timeout"
             else
                 echo "❌ Log tailing failed"
                 exit 1
