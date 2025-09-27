@@ -40,6 +40,47 @@ jobs:
           --region ${{ env.AWS_REGION }}
         echo "✅ Lambda function found"
 
+    - name: Run Lambda tests with debugging
+      run: |
+        echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
+        
+        # Get function info first
+        aws lambda get-function-configuration \
+          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+          --region ${{ env.AWS_REGION }}
+        
+        # Invoke with proper error handling
+        if aws lambda invoke \
+          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+          --payload '{}' \
+          --region ${{ env.AWS_REGION }} \
+          --cli-read-timeout 300 \
+          response1.json; then
+          
+          echo "✅ Lambda invocation successful"
+          echo "Response:"
+          cat response1.json
+          
+          # Check for function errors in response
+          if grep -q '"errorType"' response1.json; then
+            echo "❌ Lambda function returned an error"
+            exit 1
+          fi
+        else
+          echo "❌ Lambda invocation failed (timeout or other AWS CLI error)"
+          echo "Checking recent logs..."
+          
+          # Try to get recent logs
+          aws logs describe-log-streams \
+            --log-group-name "/aws/lambda/${{ env.LAMBDA_FUNCTION_NAME }}" \
+            --order-by LastEventTime \
+            --descending \
+            --max-items 1 \
+            --region ${{ env.AWS_REGION }} || echo "Could not fetch log streams"
+          
+          exit 1
+        fi
+
     - name: Get latest log stream
       id: log-stream
       run: |
