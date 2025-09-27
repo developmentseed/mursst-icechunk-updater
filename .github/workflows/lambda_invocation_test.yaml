@@ -1,4 +1,4 @@
-name: Lambda Invokation Test
+name: Lambda Invocation Test
 on:
    workflow_call:  # Make this a reusable workflow
       inputs:
