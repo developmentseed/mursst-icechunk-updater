@@ -55,7 +55,7 @@ jobs:
         echo "Response:"
         cat response1.json
 
-    - name: Alternative log extraction using request ID
+    - name: Log extraction using request ID
       if: always()
       run: |
         echo "🔄 Attempting log extraction..."
@@ -75,7 +75,7 @@ jobs:
           --output text > lambda_execution.log
         
         echo "📋 Recent Lambda logs:"
-        cat lambda_execution_alternative.log
+        cat lambda_execution.log
     
     - name: Upload Lambda logs as artifact
       if: always()
