@@ -32,6 +32,11 @@ jobs:
         role-to-assume: ${{ env.AWS_ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
 
+    - name: List all matching function names
+      run: | 
+        aws lambda list-functions --query \
+        'Functions[?contains(to_lower(FunctionName), `mur`)].{Name:FunctionName,Runtime:Runtime,LastModified:LastModified}'
+
     - name: Verify Lambda function exists
       run: |
         echo "🔍 Checking if Lambda function exists..."
