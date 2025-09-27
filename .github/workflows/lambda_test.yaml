@@ -91,13 +91,27 @@ jobs:
     - name: Run Lambda tests
       id: lambda-tests
       run: |
-        echo "🧪 Running Lambda tests..."
+        TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        cat > payload1.json << EOF
+        {
+          "test": "basic invocation",
+          "timestamp": "$TIMESTAMP"
+        }
+        EOF
         
-        # Test 1: Basic invocation
-        echo "=== Test 1: Basic Lambda invocation ==="
+        echo "Payload content:"
+        cat payload1.json
+        echo ""
+        
+        # Validate JSON before sending
+        if ! jq empty payload1.json 2>/dev/null; then
+          echo "❌ Invalid JSON payload"
+          exit 1
+        fi
+        
         aws lambda invoke \
           --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-          --payload '{"test": "basic invocation", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' \
+          --payload file://payload1.json \
           --region ${{ env.AWS_REGION }} \
           response1.json
         
