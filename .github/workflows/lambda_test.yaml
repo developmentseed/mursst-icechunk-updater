@@ -1,5 +1,4 @@
 name: Lambda Invokation Test
-
 on:
   workflow_dispatch:  # Manual trigger
     inputs:
@@ -62,9 +61,19 @@ jobs:
         echo "📥 Extracting Lambda execution logs..."
         
         # Wait a moment for logs to be available
-        sleep 10
+        sleep 15
         
-        # Get the most recent log stream
+        # Check if log group exists
+        if ! aws logs describe-log-groups \
+          --log-group-name-prefix "${{ env.LOG_GROUP_NAME }}" \
+          --region ${{ env.AWS_REGION }} \
+          --query 'logGroups[?logGroupName==`${{ env.LOG_GROUP_NAME }}`]' \
+          --output text | grep -q .; then
+          echo "❌ Log group ${{ env.LOG_GROUP_NAME }} does not exist"
+          exit 1
+        fi
+        
+        # Get the most recent log stream with proper quoting
         LATEST_STREAM=$(aws logs describe-log-streams \
           --log-group-name "${{ env.LOG_GROUP_NAME }}" \
           --order-by LastEventTime \
@@ -74,9 +83,20 @@ jobs:
           --query 'logStreams[0].logStreamName' \
           --output text)
         
+        if [ "$LATEST_STREAM" = "None" ] || [ -z "$LATEST_STREAM" ]; then
+          echo "❌ No log streams found in log group"
+          echo "Available log streams:"
+          aws logs describe-log-streams \
+            --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'logStreams[*].logStreamName' \
+            --output text
+          exit 1
+        fi
+        
         echo "Latest log stream: $LATEST_STREAM"
         
-        # Extract the logs
+        # Extract the logs with proper quoting to handle special characters
         aws logs get-log-events \
           --log-group-name "${{ env.LOG_GROUP_NAME }}" \
           --log-stream-name "$LATEST_STREAM" \
@@ -84,15 +104,56 @@ jobs:
           --query 'events[*].message' \
           --output text > lambda_execution.log
         
-        echo "📋 Lambda execution logs:"
-        cat lambda_execution.log
+        if [ $? -eq 0 ]; then
+          echo "📋 Lambda execution logs:"
+          cat lambda_execution.log
+        else
+          echo "❌ Failed to retrieve logs from stream: $LATEST_STREAM"
+          # Try to get logs from all recent streams
+          echo "Attempting to get logs from all recent streams:"
+          aws logs describe-log-streams \
+            --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+            --order-by LastEventTime \
+            --descending \
+            --max-items 5 \
+            --region ${{ env.AWS_REGION }} \
+            --query 'logStreams[*].[logStreamName,lastEventTime]' \
+            --output table
+        fi
+
+    - name: Alternative log extraction using request ID
+      if: failure()
+      run: |
+        echo "🔄 Attempting alternative log extraction..."
+        
+        # Get request ID from the response file if available
+        if [ -f "response1.json" ]; then
+          echo "Response file contents:"
+          cat response1.json
+        fi
+        
+        # Get recent log events directly without specifying stream
+        echo "Getting recent log events from the entire log group:"
+        aws logs filter-log-events \
+          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+          --start-time $(date -d '10 minutes ago' +%s)000 \
+          --region ${{ env.AWS_REGION }} \
+          --query 'events[*].message' \
+          --output text > lambda_execution_alternative.log
+        
+        echo "📋 Recent Lambda logs:"
+        cat lambda_execution_alternative.log
     
     - name: Upload Lambda logs as artifact
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: lambda-logs
-        path: lambda_execution.log
+        path: |
+          lambda_execution.log
+          lambda_execution_alternative.log
+          response1.json
+        if-no-files-found: ignore
         
   monitor-lambda:
     runs-on: ubuntu-latest
@@ -110,17 +171,33 @@ jobs:
 
     - name: Tail Lambda logs
       run: |
-          # Tail logs with timeout using background process and timeout command
-          timeout 600s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
-              --follow \
-              --region ${{ env.AWS_REGION }} || {
-              if [ $? -eq 124 ]; then
-                  echo "⏰ Log tailing stopped after 10 minutes timeout"
-              else
-                  echo "❌ Log tailing failed"
-                  exit 1
-              fi
-          }
-          
-          echo ""
-          echo "✅ Log tailing completed"
+        # Check if log group exists before tailing
+        if ! aws logs describe-log-groups \
+          --log-group-name-prefix "${{ env.LOG_GROUP_NAME }}" \
+          --region ${{ env.AWS_REGION }} \
+          --query 'logGroups[?logGroupName==`${{ env.LOG_GROUP_NAME }}`]' \
+          --output text | grep -q .; then
+          echo "❌ Log group ${{ env.LOG_GROUP_NAME }} does not exist"
+          echo "Available log groups:"
+          aws logs describe-log-groups \
+            --log-group-name-prefix "/aws/lambda/" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'logGroups[*].logGroupName' \
+            --output text
+          exit 1
+        fi
+        
+        # Tail logs with timeout using background process and timeout command
+        timeout 600s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
+            --follow \
+            --region ${{ env.AWS_REGION }} || {
+            if [ $? -eq 124 ]; then
+                echo "⏰ Log tailing stopped after 10 minutes timeout"
+            else
+                echo "❌ Log tailing failed"
+                exit 1
+            fi
+        }
+        
+        echo ""
+        echo "✅ Log tailing completed"
