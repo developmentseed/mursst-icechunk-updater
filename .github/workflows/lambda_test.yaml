@@ -1,14 +1,19 @@
 name: Lambda Invokation Test
 on:
-  workflow_dispatch:  # Manual trigger
-    inputs:
-      function_name:
-        description: 'Lambda function name to test'
-        required: false
-        default: 'mursst-icechunk-updater-staging'
-  push:  # Remove this after testing
-    branches: lambda-invoke-test
-        
+   workflow_call:  # Make this a reusable workflow
+      inputs:
+        function_name:
+          description: 'Lambda function name to test'
+          required: true
+          type: string
+   workflow_dispatch:  # Still allow manual trigger
+      inputs:
+        function_name:
+          description: 'Lambda function name to test'
+          required: false
+          default: 'mursst-icechunk-updater-staging'
+          type: string
+          
 env:
   AWS_REGION: us-west-2
   LAMBDA_FUNCTION_NAME: ${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
