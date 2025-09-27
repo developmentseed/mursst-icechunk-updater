@@ -34,8 +34,7 @@ jobs:
 
     - name: List all matching function names
       run: | 
-        aws lambda list-functions --query \
-        'Functions[?contains(to_lower(FunctionName), `mur`)].{Name:FunctionName,Runtime:Runtime,LastModified:LastModified}'
+        aws lambda list-functions --query 'Functions[].FunctionName' --output text | tr ' ' '\n' | grep -i mur
 
     - name: Verify Lambda function exists
       run: |
