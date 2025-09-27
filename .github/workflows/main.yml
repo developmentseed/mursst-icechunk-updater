@@ -76,3 +76,23 @@ jobs:
       environment: prod
       PYTHON_VERSION: "${{ vars.PYTHON_VERSION }}"
     secrets: inherit
+
+  test-staging-lambda:
+    # Test staging Lambda after successful staging deployment
+    if: always() && needs.deploy-staging.result == 'success'
+    needs:
+      - deploy-staging
+    uses: ./.github/workflows/lambda-invocation-test.yml
+    with:
+      function_name: 'mursst-icechunk-updater-staging'
+    secrets: inherit
+
+  test-prod-lambda:
+    # Test production Lambda after successful production deployment
+    if: always() && needs.deploy-prod.result == 'success'
+    needs:
+      - deploy-prod
+    uses: ./.github/workflows/lambda-invocation-test.yml
+    with:
+      function_name: 'mursst-icechunk-updater-prod'
+    secrets: inherit
