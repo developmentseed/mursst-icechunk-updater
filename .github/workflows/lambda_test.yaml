@@ -8,6 +8,8 @@ on:
         description: 'Lambda function name to test'
         required: false
         default: 'mursst-updater-staging'
+  push:  # Remove this after testing
+    branches: lambda-invoke-test
         
 env:
   AWS_REGION: us-west-2
