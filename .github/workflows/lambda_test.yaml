@@ -55,76 +55,10 @@ jobs:
         echo "Response:"
         cat response1.json
 
-    - name: Extract Lambda logs after successful invocation
-      if: success()
-      run: |
-        echo "📥 Extracting Lambda execution logs..."
-        
-        # Wait a moment for logs to be available
-        sleep 15
-        
-        # Check if log group exists
-        if ! aws logs describe-log-groups \
-          --log-group-name-prefix "${{ env.LOG_GROUP_NAME }}" \
-          --region ${{ env.AWS_REGION }} \
-          --query 'logGroups[?logGroupName==`${{ env.LOG_GROUP_NAME }}`]' \
-          --output text | grep -q .; then
-          echo "❌ Log group ${{ env.LOG_GROUP_NAME }} does not exist"
-          exit 1
-        fi
-        
-        # Get the most recent log stream with proper quoting
-        LATEST_STREAM=$(aws logs describe-log-streams \
-          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
-          --order-by LastEventTime \
-          --descending \
-          --max-items 1 \
-          --region ${{ env.AWS_REGION }} \
-          --query 'logStreams[0].logStreamName' \
-          --output text)
-        
-        if [ "$LATEST_STREAM" = "None" ] || [ -z "$LATEST_STREAM" ]; then
-          echo "❌ No log streams found in log group"
-          echo "Available log streams:"
-          aws logs describe-log-streams \
-            --log-group-name "${{ env.LOG_GROUP_NAME }}" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'logStreams[*].logStreamName' \
-            --output text
-          exit 1
-        fi
-        
-        echo "Latest log stream: $LATEST_STREAM"
-        
-        # Extract the logs with proper quoting to handle special characters
-        aws logs get-log-events \
-          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
-          --log-stream-name "$LATEST_STREAM" \
-          --region ${{ env.AWS_REGION }} \
-          --query 'events[*].message' \
-          --output text > lambda_execution.log
-        
-        if [ $? -eq 0 ]; then
-          echo "📋 Lambda execution logs:"
-          cat lambda_execution.log
-        else
-          echo "❌ Failed to retrieve logs from stream: $LATEST_STREAM"
-          # Try to get logs from all recent streams
-          echo "Attempting to get logs from all recent streams:"
-          aws logs describe-log-streams \
-            --log-group-name "${{ env.LOG_GROUP_NAME }}" \
-            --order-by LastEventTime \
-            --descending \
-            --max-items 5 \
-            --region ${{ env.AWS_REGION }} \
-            --query 'logStreams[*].[logStreamName,lastEventTime]' \
-            --output table
-        fi
-
     - name: Alternative log extraction using request ID
-      if: failure()
+      if: always()
       run: |
-        echo "🔄 Attempting alternative log extraction..."
+        echo "🔄 Attempting log extraction..."
         
         # Get request ID from the response file if available
         if [ -f "response1.json" ]; then
@@ -132,14 +66,13 @@ jobs:
           cat response1.json
         fi
         
-        # Get recent log events directly without specifying stream
         echo "Getting recent log events from the entire log group:"
         aws logs filter-log-events \
           --log-group-name "${{ env.LOG_GROUP_NAME }}" \
           --start-time $(date -d '10 minutes ago' +%s)000 \
           --region ${{ env.AWS_REGION }} \
           --query 'events[*].message' \
-          --output text > lambda_execution_alternative.log
+          --output text > lambda_execution.log
         
         echo "📋 Recent Lambda logs:"
         cat lambda_execution_alternative.log
@@ -151,7 +84,6 @@ jobs:
         name: lambda-logs
         path: |
           lambda_execution.log
-          lambda_execution_alternative.log
           response1.json
         if-no-files-found: ignore
         
@@ -188,7 +120,7 @@ jobs:
         fi
         
         # Tail logs with timeout using background process and timeout command
-        timeout 600s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
+        timeout 60s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
             --follow \
             --region ${{ env.AWS_REGION }} || {
             if [ $? -eq 124 ]; then
