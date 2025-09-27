@@ -91,12 +91,9 @@ jobs:
     - name: Run Lambda tests
       id: lambda-tests
       run: |
-        TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         cat > payload1.json << EOF
         {
-          "test": "basic invocation",
-          "timestamp": "$TIMESTAMP"
-        }
+          "test": "basic invocation",        }
         EOF
         
         echo "Payload content:"
