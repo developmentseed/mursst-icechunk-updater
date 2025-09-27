@@ -14,7 +14,7 @@ on:
 env:
   AWS_REGION: us-west-2
   LAMBDA_FUNCTION_NAME: ${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
-  LOG_GROUP_NAME: /aws/lambda/${{ github.event.inputs.function_name}}
+  LOG_GROUP_NAME: /aws/lambda/${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
   AWS_ROLE_ARN: arn:aws:iam::444055461661:role/github-actions-role-eodc
 
 jobs:
