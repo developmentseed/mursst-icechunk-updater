@@ -50,7 +50,7 @@ jobs:
           --region ${{ env.AWS_REGION }} \
           --cli-read-timeout 900 \
           --cli-connect-timeout 60 \
-          response1.json; then
+          response1.json
           
         echo "✅ Lambda invocation successful"
         echo "Response:"
