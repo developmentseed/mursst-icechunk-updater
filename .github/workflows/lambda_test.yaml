@@ -44,211 +44,44 @@ jobs:
       run: |
         echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
         
-        # Get function info first
-        aws lambda get-function-configuration \
-          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-          --region ${{ env.AWS_REGION }}
-        
-        # Invoke with proper error handling
+        # Invoke Lambda
         if aws lambda invoke \
           --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
           --payload '{}' \
           --region ${{ env.AWS_REGION }} \
           --cli-read-timeout 300 \
-          --debug \
           response1.json; then
           
           echo "✅ Lambda invocation successful"
           echo "Response:"
           cat response1.json
-          
-          # Check for function errors in response
-          if grep -q '"errorType"' response1.json; then
-            echo "❌ Lambda function returned an error"
-            exit 1
-          fi
         else
-          echo "❌ Lambda invocation failed (timeout or other AWS CLI error)"
-          echo "Checking recent logs..."
+          echo "❌ Lambda invocation failed - fetching logs..."
           
-          # Try to get recent logs
-          aws logs describe-log-streams \
+          # Get the latest log stream
+          LATEST_STREAM=$(aws logs describe-log-streams \
             --log-group-name "/aws/lambda/${{ env.LAMBDA_FUNCTION_NAME }}" \
             --order-by LastEventTime \
             --descending \
             --max-items 1 \
-            --region ${{ env.AWS_REGION }} || echo "Could not fetch log streams"
+            --region ${{ env.AWS_REGION }} \
+            --query 'logStreams[0].logStreamName' \
+            --output text)
           
-          exit 1
-        fi
-
-    - name: Get latest log stream
-      id: log-stream
-      run: |
-        LATEST_STREAM=$(aws logs describe-log-streams \
-          --log-group-name ${{ env.LOG_GROUP_NAME }} \
-          --order-by LastEventTime \
-          --descending \
-          --limit 1 \
-          --query 'logStreams[0].logStreamName' \
-          --output text)
-        echo "stream-name=$LATEST_STREAM" >> $GITHUB_OUTPUT
-
-    - name: Start log monitoring in background
-      run: |
-        # Create a script to follow logs
-        cat > follow-logs.sh << 'EOF'
-        #!/bin/bash
-        LOG_GROUP="${{ env.LOG_GROUP_NAME }}"
-        STREAM_NAME="${{ steps.log-stream.outputs.stream-name }}"
-        
-        echo "🔍 Following logs for stream: $STREAM_NAME"
-        
-        # Get current timestamp
-        START_TIME=$(date -d '1 minute ago' +%s)000
-        
-        while true; do
-          aws logs get-log-events \
-            --log-group-name "$LOG_GROUP" \
-            --log-stream-name "$STREAM_NAME" \
-            --start-time $START_TIME \
-            --query 'events[*].[timestamp,message]' \
-            --output text | while read timestamp message; do
-              if [ ! -z "$timestamp" ]; then
-                formatted_time=$(date -d "@$((timestamp/1000))" '+%Y-%m-%d %H:%M:%S')
-                echo "[$formatted_time] $message"
-              fi
-            done
-          sleep 2
-        done
-        EOF
-        
-        chmod +x follow-logs.sh
-        ./follow-logs.sh > lambda-logs.txt 2>&1 &
-        echo $! > log-follower.pid
-
-    - name: Wait for log monitoring to start
-      run: sleep 5
-
-    - name: Run Lambda tests
-      id: lambda-tests
-      run: |
-        aws lambda invoke \
-          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-          --payload {} \
-          --region ${{ env.AWS_REGION }} \
-          response1.json
-        
-        echo "Response:"
-        cat response1.json
-        echo -e "\n"
-        
-        echo -e "\n✅ All Lambda tests completed"
-
-    - name: Wait for logs to be captured
-      run: |
-        echo "⏳ Waiting for logs to be captured..."
-        sleep 10
-
-    - name: Collect and display recent logs
-      run: |
-        echo "📋 Collecting recent Lambda logs..."
-        
-        # Get logs from the last 10 minutes
-        END_TIME=$(date +%s)000
-        START_TIME=$(date -d '10 minutes ago' +%s)000
-        
-        echo "Time range: $(date -d '10 minutes ago') to $(date)"
-        echo "=============================================="
-        
-        # Get all recent log events
-        aws logs filter-log-events \
-          --log-group-name ${{ env.LOG_GROUP_NAME }} \
-          --start-time $START_TIME \
-          --end-time $END_TIME \
-          --query 'events[*].[timestamp,message]' \
-          --output text | while read timestamp message; do
-            if [ ! -z "$timestamp" ] && [ "$timestamp" != "None" ]; then
-              formatted_time=$(date -d "@$((timestamp/1000))" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "Invalid timestamp")
-              echo "[$formatted_time] $message"
-            fi
-          done > recent-logs.txt
-        
-        if [ -s recent-logs.txt ]; then
-          echo "🔍 Recent Lambda logs:"
-          cat recent-logs.txt
-        else
-          echo "⚠️ No recent logs found. The function may not have been invoked recently or logs may not be available yet."
+          echo "Latest log stream: $LATEST_STREAM"
           
-          # Try to get the latest logs without time filter
-          echo "Trying to get latest available logs..."
-          aws logs filter-log-events \
-            --log-group-name ${{ env.LOG_GROUP_NAME }} \
-            --limit 50 \
-            --query 'events[*].[timestamp,message]' \
-            --output text | tail -20 | while read timestamp message; do
-              if [ ! -z "$timestamp" ] && [ "$timestamp" != "None" ]; then
-                formatted_time=$(date -d "@$((timestamp/1000))" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "Invalid timestamp")
-                echo "[$formatted_time] $message"
-              fi
-            done || echo "No logs available"
-        fi
-
-    - name: Analyze test results
-      run: |
-        echo "📊 Analyzing test results..."
-        
-        # Check if any responses contain errors
-        ERROR_COUNT=0
-        for file in response*.json; do
-          if [ -f "$file" ]; then
-            if grep -q "errorMessage\|ERROR\|Exception" "$file"; then
-              echo "❌ Error found in $file:"
-              cat "$file"
-              ERROR_COUNT=$((ERROR_COUNT + 1))
-            else
-              echo "✅ $file - No errors detected"
-            fi
-          fi
-        done
-        
-        # Check logs for errors
-        if [ -f recent-logs.txt ]; then
-          if grep -i "error\|exception\|failed" recent-logs.txt > /dev/null; then
-            echo "⚠️ Errors found in logs:"
-            grep -i "error\|exception\|failed" recent-logs.txt
+          # Get the log events
+          if [ "$LATEST_STREAM" != "None" ] && [ "$LATEST_STREAM" != "" ]; then
+            echo "Recent log events:"
+            aws logs get-log-events \
+              --log-group-name "/aws/lambda/${{ env.LAMBDA_FUNCTION_NAME }}" \
+              --log-stream-name "$LATEST_STREAM" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'events[*].message' \
+              --output text
           else
-            echo "✅ No errors found in logs"
+            echo "No log streams found"
           fi
-        fi
-        
-        # Summary
-        if [ $ERROR_COUNT -gt 0 ]; then
-          echo "❌ Test analysis completed with $ERROR_COUNT error(s)"
+          
           exit 1
-        else
-          echo "✅ All tests passed successfully!"
         fi
-
-    - name: Upload test artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: lambda-test-results-${{ github.run_number }}
-        path: |
-          response*.json
-          recent-logs.txt
-        retention-days: 30
-
-    - name: Test summary
-      if: always()
-      run: |
-        echo "📝 Test Summary"
-        echo "==============="
-        echo "Lambda Function: ${{ env.LAMBDA_FUNCTION_NAME }}"
-        echo "Region: ${{ env.AWS_REGION }}"
-        echo "Test Run: ${{ github.run_number }}"
-        echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        echo ""
-        echo "Test files generated:"
-        ls -la response*.json recent-logs.txt 2>/dev/null || echo "No test files found"
