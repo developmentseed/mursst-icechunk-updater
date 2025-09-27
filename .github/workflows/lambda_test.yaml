@@ -48,8 +48,8 @@ jobs:
           --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
           --payload '{}' \
           --region ${{ env.AWS_REGION }} \
-          --cli-read-timeout 900 \
-          --cli-connect-timeout 60 \
+          --cli-read-timeout 1200 \
+          --cli-connect-timeout 120 \
           response1.json
           
         echo "✅ Lambda invocation successful"
