@@ -22,7 +22,7 @@ store_url_parsed = urlparse(store_url)
 
 storage = ic.s3_storage(
     bucket = store_url_parsed.netloc,
-    prefix = store_url_parsed.path,
+    prefix = store_url_parsed.path.lstrip('/'),
     from_env=True,
 )
 
@@ -87,6 +87,10 @@ To run the complete set of tests:
 ```bash
 uv run pytest
 ```
+
+#### Deployment Testing
+
+After each ci deployment a separate [test workflow of the lambda function](https://github.com/developmentseed/mursst-icechunk-updater/blob/main/.github/workflows/lambda-invocation-test.yml) is fired off to confirm that everything works correctly when deployed. This workflow can also be triggered manually for debugging
 
 ### Repo organization
 

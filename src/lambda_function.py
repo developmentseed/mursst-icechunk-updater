@@ -100,9 +100,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Using icechunk store at {store_url}")
 
         # Initialize the updater and run the update
-        updater = MursstUpdater()
+        updater = MursstUpdater(store_url)
         result_message = updater.update_icechunk_store(
-            store_target=store_url,
             run_tests=settings.run_tests,
             dry_run=settings.dry_run,
             limit_granules=settings.limit_granules,
