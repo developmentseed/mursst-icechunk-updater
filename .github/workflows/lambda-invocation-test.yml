@@ -56,7 +56,7 @@ jobs:
           --cli-connect-timeout 120 \
           response1.json
           
-        echo "✅ Lambda invocation successful\n"
+        echo "✅ Lambda invocation successful"
         echo "Response:"
         cat response1.json
 
