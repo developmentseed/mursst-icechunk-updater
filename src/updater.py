@@ -27,6 +27,7 @@ from virtualizarr.registry import ObjectStoreRegistry
 from obstore.store import S3Store
 from obstore.auth.earthdata import NasaEarthdataCredentialProvider
 from icechunk import S3StaticCredentials
+from src.exceptions import NoNewDataError, DateOrderError
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
@@ -269,6 +270,8 @@ class MursstUpdater:
         """Find granules within date range."""
         logger.info(f"Searching for granules between {start_date} and {end_date}")
         logger.debug(f"{limit_granules=}")
+        if end_date < start_date:
+            raise DateOrderError(f"{end_date=} is before {start_date=}")
 
         # This was originally intened to filter based on file attributes (based on the PODAAC description https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1)
         # But somehow the files are modified up to 9 days after the file date (details in this issue: https://github.com/developmentseed/mursst-icechunk-updater/issues/23)
@@ -283,7 +286,7 @@ class MursstUpdater:
             granule_results = granule_results[:limit_granules]
 
         if len(granule_results) == 0:
-            raise ValueError("No new data granules available")
+            raise NoNewDataError("No new data granules available")
         else:
             logger.info(f"Number of valid granules found: {len(granule_results)}")
             return granule_results

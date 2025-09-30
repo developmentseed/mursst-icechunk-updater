@@ -2,6 +2,7 @@
 import pytest
 from src.updater import MursstUpdater, combine_attrs
 from src.lambda_function import get_store_url
+from src.exceptions import DateOrderError
 import numpy as np
 import xarray as xr
 import icechunk as ic
@@ -37,6 +38,13 @@ class TestMursstUpdater:
             "s3://podaac-ops-cumulus-protected/MUR-JPL-L4-GLOB-v4.1/"
             in repo.config.virtual_chunk_containers.keys()
         )
+
+    def test_find_granules_no_date_range(self, updater_instance):
+        """Test that custom exception is raised when search dates are not monotonically increasing"""
+        start_date = "2024-09-11 21:00:01"
+        end_date = "2024-09-10 21:00:00"
+        with pytest.raises(DateOrderError):
+            updater_instance.find_granules(start_date, end_date)
 
 
 class TestUtilityFunctions:
