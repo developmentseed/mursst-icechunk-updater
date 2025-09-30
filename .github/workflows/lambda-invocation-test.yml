@@ -43,8 +43,8 @@ jobs:
           --region ${{ env.AWS_REGION }}
         echo "✅ Lambda function found"
 
-    - name: Run Lambda tests with debugging
-      run: |
+   - name: Run Lambda tests with debugging
+     run: |
         echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
         
         # Invoke Lambda
@@ -57,9 +57,20 @@ jobs:
           response1.json
           
         echo "✅ Lambda invocation successful"
+        echo ""
         echo "Response:"
         cat response1.json
-
+        echo ""
+        
+        # Check for FunctionError
+        FUNCTION_ERROR=$(jq -r '.FunctionError // empty' response1.json)
+        
+        if [ -n "$FUNCTION_ERROR" ]; then
+          echo "❌ Lambda function had an unhandled error: $FUNCTION_ERROR"
+          echo "Check CloudWatch Logs for details"
+          exit 1
+        fi
+        
         # Extract statusCode from response
         STATUS_CODE=$(jq -r '.statusCode // empty' response1.json)
         
@@ -78,6 +89,7 @@ jobs:
         else
           echo "❌ Failed! Status code $STATUS_CODE is not acceptable (expected 200 or 204)"
           exit 1
+        fi
 
     - name: Log extraction using request ID
       if: always()
