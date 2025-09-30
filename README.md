@@ -94,12 +94,13 @@ After each ci deployment a separate [test workflow of the lambda function](https
 
 ### Repo organization
 
-
+```
 ├── cdk (all code related to infrastructure)
 ├── notebooks (jupyter notebooks, loosely organized mostly for testing and development)
 ├── scripts (scripts to rebuild stores from scratch and sync dependencies)
 ├── src (business logic to update virtual zarr store, can be run locally)
 └── tests (unit and integration tests)
+```
 
 ### Environments
 
