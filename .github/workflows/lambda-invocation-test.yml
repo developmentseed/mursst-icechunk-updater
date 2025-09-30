@@ -1,19 +1,19 @@
 name: Lambda Invocation Test
 on:
-   workflow_call:  # Make this a reusable workflow
-      inputs:
-        function_name:
-          description: 'Lambda function name to test'
-          required: true
-          type: string
-   workflow_dispatch:  # Still allow manual trigger
-      inputs:
-        function_name:
-          description: 'Lambda function name to test'
-          required: false
-          default: 'mursst-icechunk-updater-staging'
-          type: string
-          
+  workflow_call: # Make this a reusable workflow
+    inputs:
+      function_name:
+        description: "Lambda function name to test"
+        required: true
+        type: string
+  workflow_dispatch: # Still allow manual trigger
+    inputs:
+      function_name:
+        description: "Lambda function name to test"
+        required: false
+        default: "mursst-icechunk-updater-staging"
+        type: string
+
 env:
   AWS_REGION: us-west-2
   LAMBDA_FUNCTION_NAME: ${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
@@ -23,149 +23,149 @@ env:
 jobs:
   test-lambda:
     runs-on: ubuntu-latest
-    
+
     permissions:
       id-token: write
       contents: read
-    
+
     steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ env.AWS_ROLE_ARN }}
-        aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Verify Lambda function exists
-      run: |
-        echo "🔍 Checking if Lambda function exists..."
-        aws lambda get-function \
-          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-          --region ${{ env.AWS_REGION }}
-        echo "✅ Lambda function found"
+      - name: Verify Lambda function exists
+        run: |
+          echo "🔍 Checking if Lambda function exists..."
+          aws lambda get-function \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda function found"
 
-   - name: Run Lambda tests with debugging
-     run: |
-        echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
-        
-        # Invoke Lambda
-        aws lambda invoke \
-          --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-          --payload '{}' \
-          --region ${{ env.AWS_REGION }} \
-          --cli-read-timeout 1200 \
-          --cli-connect-timeout 120 \
-          response1.json
-          
-        echo "✅ Lambda invocation successful"
-        echo ""
-        echo "Response:"
-        cat response1.json
-        echo ""
-        
-        # Check for FunctionError
-        FUNCTION_ERROR=$(jq -r '.FunctionError // empty' response1.json)
-        
-        if [ -n "$FUNCTION_ERROR" ]; then
-          echo "❌ Lambda function had an unhandled error: $FUNCTION_ERROR"
-          echo "Check CloudWatch Logs for details"
-          exit 1
-        fi
-        
-        # Extract statusCode from response
-        STATUS_CODE=$(jq -r '.statusCode // empty' response1.json)
-        
-        if [ -z "$STATUS_CODE" ]; then
-          echo "⚠️  No statusCode found in response"
-          echo "Response contents:"
+      - name: Run Lambda tests with debugging
+        run: |
+          echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
+
+          # Invoke Lambda
+          aws lambda invoke \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --payload '{}' \
+            --region ${{ env.AWS_REGION }} \
+            --cli-read-timeout 1200 \
+            --cli-connect-timeout 120 \
+            response1.json
+
+          echo "✅ Lambda invocation successful"
+          echo ""
+          echo "Response:"
           cat response1.json
-          exit 1
-        fi
-        
-        echo "Status Code: $STATUS_CODE"
-        
-        # Check if status code is 200 or 204
-        if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "204" ]; then
-          echo "✅ Success! Status code $STATUS_CODE is acceptable"
-        else
-          echo "❌ Failed! Status code $STATUS_CODE is not acceptable (expected 200 or 204)"
-          exit 1
-        fi
+          echo ""
 
-    - name: Log extraction using request ID
-      if: always()
-      run: |
-        echo "🔄 Attempting log extraction..."
-        
-        # Get request ID from the response file if available
-        if [ -f "response1.json" ]; then
-          echo "Response file contents:"
-          cat response1.json
-        fi
-        
-        echo "Getting recent log events from the entire log group:"
-        aws logs filter-log-events \
-          --log-group-name "${{ env.LOG_GROUP_NAME }}" \
-          --start-time $(date -d '10 minutes ago' +%s)000 \
-          --region ${{ env.AWS_REGION }} \
-          --query 'events[*].message' \
-          --output text > lambda_execution.log
-        
-        echo "📋 Recent Lambda logs:"
-        cat lambda_execution.log
-    
-    - name: Upload Lambda logs as artifact
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: lambda-logs
-        path: |
-          lambda_execution.log
-          response1.json
-        if-no-files-found: ignore
-        
+          # Check for FunctionError
+          FUNCTION_ERROR=$(jq -r '.FunctionError // empty' response1.json)
+
+          if [ -n "$FUNCTION_ERROR" ]; then
+            echo "❌ Lambda function had an unhandled error: $FUNCTION_ERROR"
+            echo "Check CloudWatch Logs for details"
+            exit 1
+          fi
+
+          # Extract statusCode from response
+          STATUS_CODE=$(jq -r '.statusCode // empty' response1.json)
+
+          if [ -z "$STATUS_CODE" ]; then
+            echo "⚠️  No statusCode found in response"
+            echo "Response contents:"
+            cat response1.json
+            exit 1
+          fi
+
+          echo "Status Code: $STATUS_CODE"
+
+          # Check if status code is 200 or 204
+          if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "204" ]; then
+            echo "✅ Success! Status code $STATUS_CODE is acceptable"
+          else
+            echo "❌ Failed! Status code $STATUS_CODE is not acceptable (expected 200 or 204)"
+            exit 1
+          fi
+
+      - name: Log extraction using request ID
+        if: always()
+        run: |
+          echo "🔄 Attempting log extraction..."
+
+          # Get request ID from the response file if available
+          if [ -f "response1.json" ]; then
+            echo "Response file contents:"
+            cat response1.json
+          fi
+
+          echo "Getting recent log events from the entire log group:"
+          aws logs filter-log-events \
+            --log-group-name "${{ env.LOG_GROUP_NAME }}" \
+            --start-time $(date -d '10 minutes ago' +%s)000 \
+            --region ${{ env.AWS_REGION }} \
+            --query 'events[*].message' \
+            --output text > lambda_execution.log
+
+          echo "📋 Recent Lambda logs:"
+          cat lambda_execution.log
+
+      - name: Upload Lambda logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-logs
+          path: |
+            lambda_execution.log
+            response1.json
+          if-no-files-found: ignore
+
   monitor-lambda:
     runs-on: ubuntu-latest
-    
+
     permissions:
       id-token: write
       contents: read
-    
-    steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ env.AWS_ROLE_ARN }}
-        aws-region: ${{ env.AWS_REGION }}
 
-    - name: Tail Lambda logs
-      run: |
-        # Check if log group exists before tailing
-        if ! aws logs describe-log-groups \
-          --log-group-name-prefix "${{ env.LOG_GROUP_NAME }}" \
-          --region ${{ env.AWS_REGION }} \
-          --query 'logGroups[?logGroupName==`${{ env.LOG_GROUP_NAME }}`]' \
-          --output text | grep -q .; then
-          echo "❌ Log group ${{ env.LOG_GROUP_NAME }} does not exist"
-          echo "Available log groups:"
-          aws logs describe-log-groups \
-            --log-group-name-prefix "/aws/lambda/" \
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Tail Lambda logs
+        run: |
+          # Check if log group exists before tailing
+          if ! aws logs describe-log-groups \
+            --log-group-name-prefix "${{ env.LOG_GROUP_NAME }}" \
             --region ${{ env.AWS_REGION }} \
-            --query 'logGroups[*].logGroupName' \
-            --output text
-          exit 1
-        fi
-        
-        # Tail logs with timeout using background process and timeout command
-        timeout 60s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
-            --follow \
-            --region ${{ env.AWS_REGION }} || {
-            if [ $? -eq 124 ]; then
-                echo "⏰ Log tailing stopped after 1 minutes timeout"
-            else
-                echo "❌ Log tailing failed"
-                exit 1
-            fi
-        }
-        
-        echo ""
-        echo "✅ Log tailing completed"
+            --query 'logGroups[?logGroupName==`${{ env.LOG_GROUP_NAME }}`]' \
+            --output text | grep -q .; then
+            echo "❌ Log group ${{ env.LOG_GROUP_NAME }} does not exist"
+            echo "Available log groups:"
+            aws logs describe-log-groups \
+              --log-group-name-prefix "/aws/lambda/" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'logGroups[*].logGroupName' \
+              --output text
+            exit 1
+          fi
+
+          # Tail logs with timeout using background process and timeout command
+          timeout 60s aws logs tail "${{ env.LOG_GROUP_NAME }}" \
+              --follow \
+              --region ${{ env.AWS_REGION }} || {
+              if [ $? -eq 124 ]; then
+                  echo "⏰ Log tailing stopped after 1 minutes timeout"
+              else
+                  echo "❌ Log tailing failed"
+                  exit 1
+              fi
+          }
+
+          echo ""
+          echo "✅ Log tailing completed"
