@@ -17,7 +17,7 @@ import json
 import icechunk
 import boto3
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Tuple, Optional, List
 import xarray as xr
 from urllib.parse import urlparse, urlunparse
@@ -263,32 +263,20 @@ class MursstUpdater:
         prefix = urlunparse(new_parsed) + "/"
         return prefix
 
-    def search_valid_granules(self, start_date: str, end_date: str):
-        """Search and filter granules to only include final processed versions"""
-        logger.info(f"Searching for granules between {start_date} and {end_date}")
-        granules = earthaccess.search_data(
-            temporal=(start_date, end_date), short_name=self.collection_short_name
-        )
-        files = earthaccess.open(granules)
-
-        def is_reprocessed(ds: xr.Dataset) -> bool:
-            if "replaced nrt (1-day latency) version." in ds.attrs["history"]:
-                return True
-            else:
-                return False
-
-        final_processing_granules = [
-            g for g, f in zip(granules, files) if is_reprocessed(xr.open_dataset(f))
-        ]
-        return final_processing_granules
-
     def find_granules(
         self, start_date: str, end_date: str, limit_granules: Optional[int] = None
     ) -> list[DataGranule]:
         """Find granules within date range."""
         logger.info(f"Searching for granules between {start_date} and {end_date}")
         logger.debug(f"{limit_granules=}")
-        granule_results = self.search_valid_granules(start_date, end_date)
+
+        # This was originally intened to filter based on file attributes (based on the PODAAC description https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1)
+        # But somehow the files are modified up to 9 days after the file date (details in this issue: https://github.com/developmentseed/mursst-icechunk-updater/issues/23)
+        # So for we are only going to add granules that are older than 9 days (set in the update_icechunk_store method).
+        logger.info(f"Searching for granules between {start_date} and {end_date}")
+        granule_results = earthaccess.search_data(
+            temporal=(start_date, end_date), short_name=self.collection_short_name
+        )
 
         if limit_granules is not None:
             logger.info(f"Limiting the number of granules to {limit_granules}")
@@ -510,16 +498,12 @@ class MursstUpdater:
             datetime.strptime("21:00:01", "%H:%M:%S").time(),
             tzinfo=timezone.utc,
         ).isoformat(sep=" ")
-        current_date_date = datetime.now(timezone.utc).date()
-        current_date = datetime.combine(
-            current_date_date,
-            datetime.strptime("21:00:00", "%H:%M:%S").time(),
-            tzinfo=timezone.utc,
-        ).isoformat(sep=" ")
+        # only find granules that are older than 10 days (see comments in search_valid_granules for details)
+        end_search = (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
 
         # search for new data
         new_granules = self.find_granules(
-            last_timestep, current_date, limit_granules=limit_granules
+            last_timestep, end_search, limit_granules=limit_granules
         )
 
         # Search for new data and create a virtual dataset
