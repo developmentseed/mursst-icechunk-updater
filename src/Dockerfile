@@ -19,6 +19,8 @@ RUN rm -rdf /asset/numpy/doc/ /asset/bin /asset/geos_license /asset/Misc
 RUN mkdir -p /asset/src
 COPY src/updater.py /asset/src/updater.py
 COPY src/settings.py /asset/src/settings.py
+COPY src/exceptions.py /asset/src/exceptions.py
 COPY src/lambda_function.py /asset/lambda_function.py
+
 
 CMD ["lambda_function.lambda_handler"]
