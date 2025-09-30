@@ -60,6 +60,25 @@ jobs:
         echo "Response:"
         cat response1.json
 
+        # Extract statusCode from response
+        STATUS_CODE=$(jq -r '.statusCode // empty' response1.json)
+        
+        if [ -z "$STATUS_CODE" ]; then
+          echo "⚠️  No statusCode found in response"
+          echo "Response contents:"
+          cat response1.json
+          exit 1
+        fi
+        
+        echo "Status Code: $STATUS_CODE"
+        
+        # Check if status code is 200 or 204
+        if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "204" ]; then
+          echo "✅ Success! Status code $STATUS_CODE is acceptable"
+        else
+          echo "❌ Failed! Status code $STATUS_CODE is not acceptable (expected 200 or 204)"
+          exit 1
+
     - name: Log extraction using request ID
       if: always()
       run: |
