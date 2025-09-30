@@ -499,7 +499,7 @@ class MursstUpdater:
             tzinfo=timezone.utc,
         ).isoformat(sep=" ")
         # only find granules that are older than 10 days (see comments in search_valid_granules for details)
-        end_search = (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+        end_search = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
 
         # search for new data
         new_granules = self.find_granules(
