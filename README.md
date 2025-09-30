@@ -140,11 +140,11 @@ uv run python scripts/build_store.py
 >[!NOTE]
 >The script will not rebuild the store up to the latest date for testing purposes. You can modify the stop date in the script as needed (start_date is set by a change in the chunking for now). 
 
->[!WARN]
+>[!WARNING]
 >This will fail if the repository (even if empty) exists. In that case you have to delete the store manually before proceeding.
 
 #### Deleting a store
->[!WARN]
+>[!WARNING]
 > Only do this with care as it might disrupt other folks workflows! This snippet depends on the content of the dotenv file, so make sure to set the correct stage.
 >You might not have permissions to delete objects. 
 
