@@ -1,6 +1,6 @@
 # MUR SST Icechunk Store Infrastructure
 
-This repository contains the logic (`./src/...`) to append new timesteps to an existing virtual Zarr store managed by the `icechunk` library, and uses AWS CDK to deploy this logic as a periodically triggered Lambda function. 
+This repository contains the logic (`./src/...`) to append new timesteps to an existing virtual Zarr store managed by the `icechunk` library, and uses AWS CDK to deploy this logic as a periodically triggered Lambda function.
 
 ## Background
 
@@ -78,7 +78,7 @@ ds['analysed_sst'].isel(time=0, lon=slice(10000, 12000), lat=slice(10000, 12000)
 ### Testing
 
 >[!WARNING]
-> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub. 
+> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub.
 
 Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
 
@@ -104,7 +104,7 @@ After each ci deployment a separate [test workflow of the lambda function](https
 
 ### Environments
 
-The MURSST updater is using different *stages* which are defined via github repository and environment variables. 
+The MURSST updater is using different *stages* which are defined via github repository and environment variables.
 
 **prod**: Production environment writing to a publicly accessible NASA-VEDA bucket. Changes for this env are only deployed upon a new release.
 
@@ -126,27 +126,26 @@ This will generate a `.env.<STAGE>` file which can be used in all following uv c
 uv run --env-file=.env.<STAGE> ...
 ```
 
-You can also set the env file as an environment variable (*recommended*): 
+You can also set the env file as an environment variable (*recommended*):
 ```bash
 export UV_ENV_FILE=.env.<STAGE>
 ```
 
 ### Rebuilding the store from scratch
-To rebuild the store from scratch (will be mostly needed in the `dev` stage due to the 7 day policy of the scratch bucket) run:
+The rebuild script will either create a branch new repository (if the prefix is empty) or reset an existing repository to the init step and overwrite the references.
+
+This is preferrable to deleting the store, since it will not interupt access to the user.
 
 ```
 uv run python scripts/build_store.py
 ```
 >[!NOTE]
->The script will not rebuild the store up to the latest date for testing purposes. You can modify the stop date in the script as needed (start_date is set by a change in the chunking for now). 
-
->[!WARNING]
->This will fail if the repository (even if empty) exists. In that case you have to delete the store manually before proceeding.
+>The script will not rebuild the store up to the latest date for testing purposes. You can modify the stop date in the script as needed (start_date is set by a change in the chunking for now).
 
 #### Deleting a store
 >[!WARNING]
-> Only do this with care as it might disrupt other folks workflows! This snippet depends on the content of the dotenv file, so make sure to set the correct stage.
->You might not have permissions to delete objects. 
+> Only do this as a last resort as it might disrupt other folks workflows! This snippet depends on the content of the dotenv file, so make sure to set the correct stage.
+>You might not have permissions to delete objects.
 
 ```
 uv run --env-file=.env.<STAGE> bash
@@ -181,7 +180,7 @@ uv run python src/lambda_function.py
 
 ### GH Actions based deployment
 
-The infrastructure deployment is achieved via Github Workflows. Depending on the event type (push vs release) the workflow deploys the lambda infrastructure to the predefined environment. This should be used over manual deployment unless there is a good reason.  
+The infrastructure deployment is achieved via Github Workflows. Depending on the event type (push vs release) the workflow deploys the lambda infrastructure to the predefined environment. This should be used over manual deployment unless there is a good reason.
 
 #### Manual Deployment
 
