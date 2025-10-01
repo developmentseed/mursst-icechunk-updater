@@ -3,6 +3,14 @@ name: Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: string
+      PYTHON_VERSION:
+        required: true
+        default: "3.12"
+        type: string
   workflow_call:
     inputs:
       environment:
