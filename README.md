@@ -1,11 +1,8 @@
 # MUR SST Icechunk Store Infrastructure
 
-This repository contains the logic (`./src/...`) to append new timesteps to an existing virtual Zarr store managed by the `icechunk` library, and uses AWS CDK to deploy this logic as a periodically triggered Lambda function.
+This repository contains the business logic and AWS CDK deployment logic to create and regularly update a virtual icechunk store that points to [GHRSST Level 4 MUR Global Foundation Sea Surface Temperature Analysis (v4.1)](https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1) netcdf files on S3 object storage utilizing the [virtualizarr library](https://github.com/zarr-developers/VirtualiZarr).
 
-## Background
-
-
-## Access Example
+## Try it out
 
 This snippet shows how to open the store and make a first plot
 
