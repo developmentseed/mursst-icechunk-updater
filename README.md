@@ -10,8 +10,10 @@ This snippet shows how to open the store and make a first plot
 import icechunk as ic
 from icechunk.credentials import S3StaticCredentials
 from datetime import datetime
+import matplotlib.pyplot as plt
 from urllib.parse import urlparse
 import earthaccess
+from dask.diagnostics import ProgressBar
 import xarray as xr
 
 store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
@@ -60,9 +62,41 @@ repo = ic.Repository.open(
 
 session = repo.readonly_session('main')
 ds = xr.open_zarr(session.store, zarr_format=3, consolidated=False)
-ds['analysed_sst'].isel(time=0, lon=slice(10000, 12000), lat=slice(10000, 12000)).plot()
+da = ds['analysed_sst'].isel(lon=slice(10000, 12000), lat=slice(10000, 12000))
+da.isel(time=0).plot()
+
+plt.figure()
+
+with ProgressBar():
+    da.mean(['lon', 'lat']).plot()
 ```
-> This has been tested on the NASA VEDA hub.
+> Executes in < 1 minute  on 16 core/64GB veda hub instance
+
+compare to the non-virtualized workflow
+
+```python
+start_date = ds.time.data[0].astype("datetime64[ms]").astype(datetime)
+end_date = ds.time.data[-1].astype("datetime64[ms]").astype(datetime)
+granules = earthaccess.search_data(
+            temporal=(start_date, end_date),
+            short_name="MUR-JPL-L4-GLOB-v4.1"
+)
+files = earthaccess.open(granules)
+
+def preprocess(ds: xr.Dataset) -> xr.Dataset:
+            return ds.drop_vars(["dt_1km_data", "sst_anomaly"], errors="ignore")
+
+ds_legacy = xr.open_mfdataset(files, preprocess=preprocess, parallel=True)
+da = ds_legacy['analysed_sst'].isel(lon=slice(10000, 12000), lat=slice(10000, 12000))
+da.isel(time=0).plot()
+
+plt.figure()
+
+with ProgressBar():
+    da.mean(['lon', 'lat']).plot()
+```
+
+> Takes 10+ min on 16 core/64GB veda hub instance
 
 ## Development Guide
 

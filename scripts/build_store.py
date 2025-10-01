@@ -36,7 +36,6 @@ print("Writing to store")
 updater.setup_repo()
 rebuild_branch = f"rebuild_store_{datetime.now(timezone.utc).isoformat()}"
 
-
 # rewind to init snapshot
 init_snapshot = list(updater.repo.ancestry(branch="main"))[-1].id
 updater.repo.create_branch(rebuild_branch, snapshot_id=init_snapshot)
