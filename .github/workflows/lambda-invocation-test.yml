@@ -55,7 +55,7 @@ jobs:
       - name: Set payload
         id: payload
         run: |
-          if [ "${{ github.event.inputs.use_dry_run }}" = "true" ]; then
+          if [ "${{ inputs.use_dry_run }}" = "true" ]; then
             echo "payload={ \"dry_run\": true }" >> $GITHUB_OUTPUT
             echo "📦 Using dry run payload"
           else
