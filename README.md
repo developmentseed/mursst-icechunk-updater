@@ -70,7 +70,7 @@ plt.figure()
 with ProgressBar():
     da.mean(['lon', 'lat']).plot()
 ```
-> Executes in < 1 minute  on 16 core/64GB veda hub instance
+> Executes in < 45 seconds  on 16 core/64GB veda hub instance
 
 compare to the non-virtualized workflow
 
@@ -96,7 +96,7 @@ with ProgressBar():
     da.mean(['lon', 'lat']).plot()
 ```
 
-> Takes 10+ min on 16 core/64GB veda hub instance
+> Takes 11+ min on 16 core/64GB veda hub instance
 
 ## Development Guide
 
