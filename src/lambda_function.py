@@ -89,8 +89,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         # Load settings
         settings = RuntimeSettings()
+
+        # Override settings from event payload
+        dry_run = event.get("dry_run", settings.dry_run)
+        run_tests = event.get("run_tests", settings.run_tests)
+        limit_granules = event.get("limit_granules", settings.limit_granules)
+
         logger.info(
-            f"Loaded settings: run_tests={settings.run_tests}, dry_run={settings.dry_run}, limit_granules={settings.limit_granules}"
+            f"Loaded settings: run_tests={run_tests}, dry_run={dry_run}, limit_granules={limit_granules}"
         )
 
         # Setup credentials
@@ -103,9 +109,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Initialize the updater and run the update
         updater = MursstUpdater(store_url)
         result_message = updater.update_icechunk_store(
-            run_tests=settings.run_tests,
-            dry_run=settings.dry_run,
-            limit_granules=settings.limit_granules,
+            run_tests=run_tests,
+            dry_run=dry_run,
+            limit_granules=limit_granules,
             parallel=False,  # Disable parallel processing in Lambda environment
         )
 
