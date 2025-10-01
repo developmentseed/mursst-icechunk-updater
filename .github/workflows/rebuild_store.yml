@@ -44,5 +44,15 @@ jobs:
           role-session-name: ${{ github.actor }}
           aws-region: ${{ env.AWS_DEFAULT_REGION }}
 
+      - name: Convert vars to environment variables
+        env:
+          VARS_JSON: ${{ toJson(vars) }}
+        run: |
+          while read -rd $'' line; do
+            echo "$line" >> $GITHUB_ENV
+          done < <(
+            jq -r <<<"$VARS_JSON" 'to_entries|map("\(.key)=\(.value)\u0000")[]'
+          )
+
       - name: Run rebuild script
         run: uv run python scripts/build_store.py
