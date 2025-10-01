@@ -8,8 +8,7 @@ on:
         type: string
       use_dry_run:
         description: "Use dry run payload"
-        required: false
-        default: true
+        required: true
         type: boolean
   workflow_dispatch: # Still allow manual trigger
     inputs:
