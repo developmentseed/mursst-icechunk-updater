@@ -1,0 +1,38 @@
+name: Manually Rebuild Store from scratch
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Deployment Stage"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bootstrap dotenv file
+        run: uv run scripts/bootstrap_dotenv.sh ${{ inputs.stage }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME_ARN }}
+          role-session-name: ${{ github.actor }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Run rebuild script
+        run: uv run python scripts/build_store.py

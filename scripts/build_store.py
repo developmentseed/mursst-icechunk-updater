@@ -7,6 +7,7 @@
 
 from src.updater import MursstUpdater
 from src.lambda_function import RuntimeSettings, get_store_url
+from datetime import datetime, timezone
 
 settings = RuntimeSettings()
 
@@ -15,10 +16,10 @@ print(f"Rebuilding Store in {store_url}")
 
 updater = MursstUpdater(store_url)
 
-
 # Get data and combine into virtual dataset
 start_date = "2024-06-01 21:00:01"  # In my manual testing this was the earliest I could go without hitting: ValueError: Cannot concatenate arrays with inconsistent chunk shapes: (1, 1023, 2047) vs (1, 3600, 7200) .Requires ZEP003 (Variable-length Chunks).
-end_date = "2025-09-10 21:00:00"
+# end_date = "2024-09-10 21:00:00"
+end_date = "2024-06-10 21:00:00"
 
 # Search for granules
 print("Finding new granules")
@@ -33,7 +34,18 @@ print(f"{vds=}")
 # write to store
 print("Writing to store")
 updater.setup_repo()
-session = updater.repo.writable_session("main")
+rebuild_branch = f"rebuild_store_{datetime.now(timezone.utc).isoformat()}"
+
+
+# rewind to init snapshot
+init_snapshot = list(updater.repo.ancestry(branch="main"))[-1].id
+updater.repo.create_branch(rebuild_branch, snapshot_id=init_snapshot)
+
+# start a branch at the repo init snapshot (this should work both for fresh repos as well as already populated ones. !!!This will eliminate all snapshots of earlier data!
+session = updater.repo.writable_session(rebuild_branch)
 vds.vz.to_icechunk(session.store)
-session.commit("First Batch Write")
+session.commit(
+    f"rebuild store from scratch on {datetime.now(timezone.utc).isoformat()}"
+)
+updater.repo.reset_branch("main", updater.repo.lookup_branch(rebuild_branch))
 print(f"Writing finished to {store_url}")
