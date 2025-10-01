@@ -131,6 +131,7 @@ You can also set the env file as an environment variable (*recommended*):
 export UV_ENV_FILE=.env.<STAGE>
 ```
 
+
 ### Rebuilding the store from scratch
 The rebuild script will either create a branch new repository (if the prefix is empty) or reset an existing repository to the init step and overwrite the references.
 
