@@ -25,8 +25,8 @@ on:
 
 env:
   AWS_REGION: us-west-2
-  LAMBDA_FUNCTION_NAME: ${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
-  LOG_GROUP_NAME: /aws/lambda/${{ github.event.inputs.function_name || 'mursst-icechunk-updater-staging'}}
+  LAMBDA_FUNCTION_NAME: ${{ inputs.function_name || 'mursst-icechunk-updater-staging'}}
+  LOG_GROUP_NAME: /aws/lambda/${{ inputs.function_name || 'mursst-icechunk-updater-staging'}}
   AWS_ROLE_ARN: arn:aws:iam::444055461661:role/github-actions-role-eodc
 
 jobs:
@@ -139,7 +139,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: lambda-logs
+          name: "lambda-logs-${{ env.LAMBDA_FUNCTION_NAME }}"
           path: |
             lambda_execution.log
             response1.json
