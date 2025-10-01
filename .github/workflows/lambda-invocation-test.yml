@@ -47,13 +47,10 @@ jobs:
         run: |
           echo "Testing Lambda function: ${{ env.LAMBDA_FUNCTION_NAME }}"
 
-          # Create payload
-          echo '{"dry_run": true}' > payload.json
-
           # Invoke Lambda
           aws lambda invoke \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-            --payload file://payload.json \
+            --payload '{ "dry_run":"true" }' \
             --region ${{ env.AWS_REGION }} \
             --cli-read-timeout 1200 \
             --cli-connect-timeout 120 \
