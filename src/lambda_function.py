@@ -13,6 +13,7 @@ from typing import Dict, Any
 # Import business logic
 from src.updater import MursstUpdater, get_secret_from_aws
 from src.settings import RuntimeSettings
+from src.exceptions import GranuleSearchError
 
 # Configure logging for Lambda
 logging.basicConfig(
@@ -111,23 +112,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Update completed successfully: {result_message}")
         return create_success_response(result_message)
 
-    except ValueError as e:
-        # Handle business logic errors (like no new data)
-        error_msg = f"Data processing error: {str(e)}"
+    except GranuleSearchError as e:
+        # Handle no new data available (via custom exception)
+        error_msg = f"Granule search error: {str(e)}"
         logger.warning(error_msg)
-        return create_error_response(error_msg, status_code=422)
-
-    except PermissionError as e:
-        # Handle authentication/authorization errors
-        error_msg = f"Authentication error: {str(e)}"
-        logger.error(error_msg)
-        return create_error_response(error_msg, status_code=403)
-
-    except KeyError as e:
-        # Handle missing configuration
-        error_msg = f"Configuration error: {str(e)}"
-        logger.error(error_msg)
-        return create_error_response(error_msg, status_code=500)
+        return create_error_response(error_msg, status_code=204)
 
     except Exception as e:
         # Handle unexpected errors

@@ -9,7 +9,16 @@ repos:
         description: Validates JSON syntax
       - id: pretty-format-json
         description: Formats JSON with consistent indentation
-        args: ['--autofix', '--indent=2']
+        args: ["--autofix", "--indent=2"]
+      - id: check-yaml
+        args: ["--unsafe"]
+        name: Check YAML syntax
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
   - repo: local
     hooks:
       - id: sync-requirements
@@ -19,19 +28,38 @@ repos:
         always_run: false
         pass_filenames: false
         stages: [pre-commit]
+
   - repo: https://github.com/astral-sh/uv-pre-commit
-    # uv version.
     rev: 0.8.4
     hooks:
       - id: uv-lock
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
     rev: v0.12.7
     hooks:
-      # Run the linter.
+      # Run the linter
       - id: ruff
-        types_or: [ python, pyi ]
-        args: [ --fix ]
-      # Run the formatter.
+        types_or: [python, pyi]
+        args: [--fix]
+      # Run the formatter
       - id: ruff-format
-        types_or: [ python, pyi ]
+        types_or: [python, pyi]
+
+  # Auto-format YAML files with prettier (better for GitHub Actions)
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types_or: [yaml]
+        additional_dependencies:
+          - prettier@3.1.0
+        args:
+          - --print-width=120
+          - --prose-wrap=preserve
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.28.0
+    hooks:
+      - id: check-github-workflows
+        name: Validate GitHub Workflows
+        args: ["--verbose"]
