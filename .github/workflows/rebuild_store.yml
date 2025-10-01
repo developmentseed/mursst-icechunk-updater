@@ -18,6 +18,7 @@ jobs:
     environment:  ${{ inputs.stage }}
     env:
        GH_TOKEN: ${{ github.token }}
+       AWS_DEFAULT_REGION: "us-west-2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
