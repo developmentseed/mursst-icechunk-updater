@@ -85,6 +85,7 @@ jobs:
     uses: ./.github/workflows/lambda-invocation-test.yml
     with:
       function_name: 'mursst-icechunk-updater-staging'
+      use_dry_run: true
     secrets: inherit
 
   test-prod-lambda:
@@ -95,4 +96,5 @@ jobs:
     uses: ./.github/workflows/lambda-invocation-test.yml
     with:
       function_name: 'mursst-icechunk-updater-prod'
+      use_dry_run: true
     secrets: inherit
