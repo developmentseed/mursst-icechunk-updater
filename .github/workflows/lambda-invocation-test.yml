@@ -50,7 +50,7 @@ jobs:
           # Invoke Lambda
           aws lambda invoke \
             --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-            --payload '{}' \
+            --payload '{"dry_run":true}' \
             --region ${{ env.AWS_REGION }} \
             --cli-read-timeout 1200 \
             --cli-connect-timeout 120 \
