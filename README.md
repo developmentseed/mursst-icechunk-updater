@@ -42,22 +42,21 @@ def get_icechunk_creds(daac: str = None) -> S3StaticCredentials:
         session_token=creds["sessionToken"],
     )
 
+# Get the stored config and create container credentials for all virtual chunk containers
+# This is easy here since its just one container, but for demonstrations sake:
+config = ic.Repository.fetch_config(storage=storage)
 
-
-# TODO: Is there a way to avoid double opening? Maybe not super important
-repo = ic.Repository.open(
-    storage=storage,
+container_credentials = ic.containers_credentials(
+    {k: ic.s3_refreshable_credentials(
+        get_credentials=get_icechunk_creds
+    ) for k in config.virtual_chunk_containers.keys()
+    }
 )
-# see if reopening works
+
+# Now open the repo with all the appropriate credentials
 repo = ic.Repository.open(
     storage=storage,
-    authorize_virtual_chunk_access = ic.containers_credentials(
-        {
-            k: ic.s3_refreshable_credentials(
-                    get_credentials=get_icechunk_creds
-                ) for k in repo.config.virtual_chunk_containers.keys()
-        }
-    )
+    authorize_virtual_chunk_access = container_credentials
 )
 
 session = repo.readonly_session('main')
