@@ -6,6 +6,19 @@ This repository contains the business logic and AWS CDK deployment logic to crea
 
 This snippet shows how to open the store and make a first plot
 
+> [!NOTE]
+> **Simplifying virtual chunk authentication with earthaccess**
+> 
+> We are working on simplifying the code below by leveraging [earthaccess](https://earthaccess.readthedocs.io/).
+> In an ideal world we could do something like this soon:
+> ```python
+> import earthaccess
+> store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
+> icechunk_store = earthaccess.open_datacube(store_url,...)
+> ds = xr.open_icechunk(icechunk_store, engine='zarr', zarr_format=3, consolidated=False)
+> ```
+> Follow this [PR](https://github.com/nsidc/earthaccess/pull/1135) for updates.
+
 ```python
 import icechunk as ic
 from icechunk.credentials import S3StaticCredentials
