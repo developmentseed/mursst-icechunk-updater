@@ -14,8 +14,8 @@ This snippet shows how to open the store and make a first plot
 > ```python
 > import earthaccess
 > store_url = "s3://nasa-eodc-public/icechunk/MUR-JPL-L4-GLOB-v4.1-virtual-v2-p2"
-> icechunk_store = earthaccess.open_datacube(store_url,...)
-> ds = xr.open_icechunk(icechunk_store, engine='zarr', zarr_format=3, consolidated=False)
+> icechunk_store = earthaccess.open_icechunk(store_url,...)
+> ds = xr.open_dataset(icechunk_store, engine='zarr', zarr_format=3, consolidated=False)
 > ```
 > Follow this [PR](https://github.com/nsidc/earthaccess/pull/1135) for updates.
 
