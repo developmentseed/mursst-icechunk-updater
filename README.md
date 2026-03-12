@@ -178,7 +178,7 @@ export UV_ENV_FILE=.env.<STAGE>
 ### Rebuilding the store from scratch
 The rebuild script will either create a branch new repository (if the prefix is empty) or reset an existing repository to the init step and overwrite the references.
 
-This is preferrable to deleting the store, since it will not interupt access to the user.
+This is preferrable to deleting the store, since it will not interrupt access to the user.
 
 ```
 uv run python scripts/build_store.py
@@ -203,6 +203,7 @@ aws s3 rm --recursive "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 
 ### Run update logic manually
 To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
+
 ```
 export DRY_RUN=true #do not commit to the main icechunk branch
 ```
