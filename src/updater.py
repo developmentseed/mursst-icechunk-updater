@@ -495,14 +495,14 @@ class MursstUpdater:
         ds_main = self.open_xr_dataset_from_branch("main")
 
         # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
-        last_date = self.get_timestep_from_ds(ds_main, -1).date()
+        last_date = self.get_timestep_from_ds(ds_main, -5).date()
         last_timestep = datetime.combine(
             last_date,
             datetime.strptime("21:00:01", "%H:%M:%S").time(),
             tzinfo=timezone.utc,
         ).isoformat(sep=" ")
         # only find granules that are older than 10 days (see comments in search_valid_granules for details)
-        end_search = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+        end_search = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
 
         # search for new data
         new_granules = self.find_granules(
@@ -539,7 +539,9 @@ class MursstUpdater:
 
         # Append new data and commit
         session = self.repo.writable_session(branch=self.branchname)
-        vds.vz.to_icechunk(session.store, append_dim="time")
+        # vds.vz.to_icechunk(session.store, append_dim="time")
+        vds.vz.to_icechunk(session.store, region="auto")
+ 
         snapshot = session.commit(commit_message)
         logger.info(
             f"Commit successful to branch: {self.branchname} as snapshot:{snapshot} \n {commit_message}"
