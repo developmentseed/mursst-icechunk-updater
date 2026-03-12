@@ -49,4 +49,21 @@ gh variable list --env "$STAGE" \
 # --- ensure env vars override repo vars (portable) ---
 awk -F= '{ seen[$1]=$0 } END { for (k in seen) print seen[k] }' "$TMP_FILE" > "$ENV_FILE"
 
+# --- prompt for sensitive credentials ---
+echo ""
+echo "🔐 Enter Earthdata credentials (leave blank to skip):"
+
+read -rp "  EARTHDATA_USERNAME: " EARTHDATA_USERNAME
+if [[ -n "$EARTHDATA_USERNAME" ]]; then
+  read -rsp "  EARTHDATA_PASSWORD: " EARTHDATA_PASSWORD
+  echo ""
+  # append or overwrite existing entries
+  grep -v "^EARTHDATA_" "$ENV_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$ENV_FILE"
+  echo "EARTHDATA_USERNAME=$EARTHDATA_USERNAME" >> "$ENV_FILE"
+  echo "EARTHDATA_PASSWORD=$EARTHDATA_PASSWORD" >> "$ENV_FILE"
+  echo "✅ Earthdata credentials written."
+else
+  echo "⏭️  Skipping Earthdata credentials."
+fi
+
 echo "✨ Wrote merged env file to $ENV_FILE"
