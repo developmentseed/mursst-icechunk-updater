@@ -22,13 +22,15 @@
     }
     ```
   - `Not all values of coordinate 'time' in the new array were found in the original store`
-- [ ] add overwrite_start_date and overwrite_start_date as an argument to the lambda manual run
+- [x] add overwrite_start_date and overwrite_start_date as an argument to the lambda manual run
 - [x] Remove the local_dev notebook
 
 ## Deploy to staging
 
-- [ ] test the staging deployment
-- [ ] test overwriting with the staging deployment
+- [x] test staging exhibits the same problem
+  - `uv run scripts/bootstrap_dotenv.sh staging` and then run the hub test where we try and extract data during the date 11-13-2025 --> same checksum error is thrown
+- [ ] deploy branch to staging
+- [ ] test overwriting that date via the staging deployment lambda
 
 ## Deploy to prod
 

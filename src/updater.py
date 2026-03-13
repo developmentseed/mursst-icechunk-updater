@@ -514,7 +514,7 @@ class MursstUpdater:
             ).isoformat(sep=" ")
 
         if overwrite_date_range is not None:
-            start_date = mursst_datetime(overwrite_date_range[0], "21:00:00")
+            start_date = mursst_datetime(overwrite_date_range[0], "20:59:59")
             end_date = mursst_datetime(overwrite_date_range[1], "20:59:59")
             mursst_datetime(overwrite_date_range[1])
             logger.info(f"Overwrite mode: reprocessing {start_date} to {end_date}")
