@@ -10,9 +10,19 @@
 - [x] make sure the hub test works
   - using `updater.update_icechunk_store(store_url, parallel=False)` 2 timesteps are are added
   - `Successfully updated store and merged add_time_2026-03-13T15:39:41.273590+00:00 to main`
-- [ ] try appending to it using the lambda function without overwrite args
-- [ ] test it works with the overwrite args
-- [ ] test the staging deployment
+- [x] try appending to it using the lambda function without overwrite args
+  - removed and rebuilt the store
+  - ran the lambda, first with DRY_RUN=true and then DRY_RUN=false
+- [x] test it works with the overwrite args
+  - added to the lambda:
+    ```json
+    test_event = {
+        "overwrite_start_date": "2026-03-01",
+        "overwrite_start_date": "2026-03-03"
+    }
+    ```
+  - `Not all values of coordinate 'time' in the new array were found in the original store`
+- [ ] add overwrite_start_date and overwrite_start_date as an argument to the lambda manual run
 - [x] Remove the local_dev notebook
 
 ## Deploy to staging

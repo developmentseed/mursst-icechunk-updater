@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
+from dateutil import parser
 import logging
 import earthaccess
 from earthaccess import DataGranule
@@ -160,9 +161,14 @@ class MursstUpdater:
         store_target: str,
         collection_short_name: str = "MUR-JPL-L4-GLOB-v4.1",
         drop_vars: List[None | str] = ["dt_1km_data", "sst_anomaly"],
+        overwrite_date_range: Optional[tuple] = None,
     ):
         """Initialize the updater with current timestamp for branch naming."""
-        self.branchname = f"add_time_{datetime.now(timezone.utc).isoformat()}"
+        if overwrite_date_range:
+            # one issue with this is we will get a conflict error if we try to create this branch more than once
+            self.branchname = f"update_dates_{'-to-'.join(overwrite_date_range)}"
+        else:
+            self.branchname = f"add_time_{datetime.now(timezone.utc).isoformat()}"
         self.store_target = store_target
         self.collection_short_name = collection_short_name
         self.drop_vars = drop_vars
@@ -417,25 +423,26 @@ class MursstUpdater:
             )
 
         # Check attributes that should have changed
-        logger.info("Checking attributes that should be updated...")
-        check_changed_attrs = ["stop_time", "time_coverage_end"]
-        unchanged_attrs = []
-        for attr in check_changed_attrs:
-            if attr not in ds_old.attrs:
-                errors.append(
-                    f"Expected attribute '{attr}' is missing from original dataset."
-                )
-            elif attr not in ds_new.attrs:
-                errors.append(
-                    f"Expected attribute '{attr}' is missing from new dataset."
-                )
-            elif ds_new.attrs[attr] == ds_old.attrs[attr]:
-                unchanged_attrs.append(f"'{attr}': '{ds_old.attrs[attr]}'")
+        if not overwrite:
+            logger.info("Checking attributes that should be updated...")
+            check_changed_attrs = ["stop_time", "time_coverage_end"]
+            unchanged_attrs = []
+            for attr in check_changed_attrs:
+                if attr not in ds_old.attrs:
+                    errors.append(
+                        f"Expected attribute '{attr}' is missing from original dataset."
+                    )
+                elif attr not in ds_new.attrs:
+                    errors.append(
+                        f"Expected attribute '{attr}' is missing from new dataset."
+                    )
+                elif ds_new.attrs[attr] == ds_old.attrs[attr]:
+                    unchanged_attrs.append(f"'{attr}': '{ds_old.attrs[attr]}'")
 
-        if unchanged_attrs:
-            errors.append(
-                f"The following attributes should have been updated but remained unchanged: {', '.join(unchanged_attrs)}"
-            )
+            if unchanged_attrs:
+                errors.append(
+                    f"The following attributes should have been updated but remained unchanged: {', '.join(unchanged_attrs)}"
+                )
 
         # Check for required attributes presence
         logger.info("Validating presence of required attributes...")
@@ -496,25 +503,33 @@ class MursstUpdater:
         logger.info("Finding dates to append to existing store")
         ds_main = self.open_xr_dataset_from_branch("main")
 
+        def mursst_datetime(date: str | datetime, timestamp: str = "21:00:00"):
+            # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
+            if isinstance(date, str):
+                date = parser.parse(date)
+            return datetime.combine(
+                date,
+                datetime.strptime(timestamp, "%H:%M:%S").time(),
+                tzinfo=timezone.utc
+            ).isoformat(sep=" ")
+
         if overwrite_date_range is not None:
-            start_date, end_date = overwrite_date_range
+            start_date = mursst_datetime(overwrite_date_range[0], "21:00:00")
+            end_date = mursst_datetime(overwrite_date_range[1], "20:59:59")
+            mursst_datetime(overwrite_date_range[1])
             logger.info(f"Overwrite mode: reprocessing {start_date} to {end_date}")
             write_kwargs = {"region": "auto"}
         else:
-            # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
             last_date = self.get_timestep_from_ds(ds_main, -1).date()
-            last_timestep = datetime.combine(
-                last_date,
-                datetime.strptime("21:00:01", "%H:%M:%S").time(),
-                tzinfo=timezone.utc,
-            ).isoformat(sep=" ")
+            # the start of the range should be offset by 1 minute so we don't discover the 2 granules at the start of the datetime range
+            start_date = mursst_datetime(last_date, "21:00:01")
             # only find granules that are older than 10 days (see comments in search_valid_granules for details)
-            end_search = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+            end_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
             write_kwargs = {"append_dim": "time"}
 
         # search for new data
         new_granules = self.find_granules(
-            last_timestep, end_search, limit_granules=limit_granules
+            start_date, end_date, limit_granules=limit_granules
         )
 
         # Search for new data and create a virtual dataset
@@ -534,7 +549,7 @@ class MursstUpdater:
         logger.info(f"Writing to icechunk branch {self.branchname}")
         commit_message = f"MUR update {self.branchname}"
         # Attributes
-        # AFAIKT virtualizarr (and perhaps xarray too?) just update/overwrite the attributes when appending to a store?
+        # AFAICT virtualizarr (and perhaps xarray too?) just update/overwrite the attributes when appending to a store?
         # TODO:This definitely warrants a more detailed discussion, MRE etc in an issue
         # For now what I will attempt is to manually update the attrs on the virtual
         # dataset and then see if those are written to the store.
