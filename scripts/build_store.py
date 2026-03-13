@@ -17,7 +17,7 @@ print(f"Rebuilding Store in {store_url}")
 updater = MursstUpdater(store_url)
 
 # Get data and combine into virtual dataset
-start_date = "2026-02-26 21:00:01"  # In my manual testing this was the earliest I could go without hitting: ValueError: Cannot concatenate arrays with inconsistent chunk shapes: (1, 1023, 2047) vs (1, 3600, 7200) .Requires ZEP003 (Variable-length Chunks).
+start_date = "2026-02-28 21:00:01"  # In my manual testing this was the earliest I could go without hitting: ValueError: Cannot concatenate arrays with inconsistent chunk shapes: (1, 1023, 2047) vs (1, 3600, 7200) .Requires ZEP003 (Variable-length Chunks).
 # end_date = "2024-09-10 21:00:00"
 end_date = (datetime.now() - timedelta(days=12)).strftime("%Y-%m-%d %H:%M:%S")
 

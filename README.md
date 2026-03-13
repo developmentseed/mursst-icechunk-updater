@@ -2,9 +2,11 @@
 
 This repository contains the business logic and AWS CDK deployment logic to create and regularly update a virtual icechunk store that points to [GHRSST Level 4 MUR Global Foundation Sea Surface Temperature Analysis (v4.1)](https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1) netcdf files on S3 object storage utilizing the [virtualizarr library](https://github.com/zarr-developers/VirtualiZarr).
 
-## Try it out
+## Using the store
 
-This snippet shows how to open the store and make a first plot
+This snippet shows how to open the store and plot the data.
+
+See the [Development Guide](#development-guide) below for details on how to test and deploy the icechunk store updater.
 
 > [!NOTE]
 > **Simplifying virtual chunk authentication with earthaccess**
@@ -118,6 +120,14 @@ with ProgressBar():
 - uv
 - Github CLI
 
+### Setup
+
+```bash
+git clone <repository-url>
+cd mursst-icechunk-updater
+uv run sync
+```
+
 ### Testing
 
 >[!WARNING]
@@ -133,16 +143,16 @@ uv run pytest
 
 #### Deployment Testing
 
-After each ci deployment a separate [test workflow of the lambda function](https://github.com/developmentseed/mursst-icechunk-updater/blob/main/.github/workflows/lambda-invocation-test.yml) is fired off to confirm that everything works correctly when deployed. This workflow can also be triggered manually for debugging
+After each CI deployment a separate [test workflow of the lambda function](https://github.com/developmentseed/mursst-icechunk-updater/blob/main/.github/workflows/lambda-invocation-test.yml) is fired off to confirm that everything works correctly when deployed. This workflow can also be triggered manually for debugging.
 
 ### Repo organization
 
 ```
-├── cdk (all code related to infrastructure)
-├── notebooks (jupyter notebooks, loosely organized mostly for testing and development)
-├── scripts (scripts to rebuild stores from scratch and sync dependencies)
-├── src (business logic to update virtual zarr store, can be run locally)
-└── tests (unit and integration tests)
+├── cdk/ (all code related to infrastructure)
+├── notebooks/ (jupyter notebooks, loosely organized mostly for testing and development)
+├── scripts/ (scripts to rebuild stores from scratch and sync dependencies)
+├── src/ (business logic to update virtual zarr store, can be run locally)
+└── tests/ (unit and integration tests)
 ```
 
 ### Environments
@@ -176,13 +186,15 @@ export UV_ENV_FILE=.env.<STAGE>
 
 
 ### Rebuilding the store from scratch
-The rebuild script will either create a branch new repository (if the prefix is empty) or reset an existing repository to the init step and overwrite the references.
+
+The rebuild script will either create a brand new repository (if the prefix is empty) or reset an existing repository to the init step and overwrite the references.
 
 This is preferrable to deleting the store, since it will not interrupt access to the user.
 
 ```
 uv run python scripts/build_store.py
 ```
+
 >[!NOTE]
 >The script will not rebuild the store up to the latest date for testing purposes. You can modify the stop date in the script as needed (start_date is set by a change in the chunking for now).
 
@@ -195,6 +207,7 @@ uv run python scripts/build_store.py
 uv run --env-file=.env.<STAGE> bash
 echo "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 ```
+
 if you are sure you want to delete the objects displayed run
 ```
 aws s3 rm --recursive "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
@@ -206,11 +219,11 @@ aws s3 rm --recursive "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
 
 ```
-export DRY_RUN=true #do not commit to the main icechunk branch
+export DRY_RUN=true # do not commit to the main icechunk branch
 ```
 
 ```
-export RUN_TESTS=false #Omit (expensive) testing
+export RUN_TESTS=false # omit (expensive) testing
 ```
 
 ```
