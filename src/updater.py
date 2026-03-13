@@ -351,7 +351,7 @@ class MursstUpdater:
         filenames = [os.path.basename(path) for path in vchunks_locations]
         return filenames
 
-    def test_new_data(self, ds_old, new_granules):
+    def test_new_data(self, ds_old, new_granules, overwrite: bool = False):
         logger.info("Starting comprehensive dataset validation tests")
         errors = []
 
@@ -383,14 +383,15 @@ class MursstUpdater:
             )
 
         # Append consistency with granules
-        logger.info("Validating granule count consistency...")
-        expected_new_timesteps = len(new_granules)
-        actual_new_timesteps = len(ds_new.time) - len(ds_old.time)
-        if actual_new_timesteps != expected_new_timesteps:
-            errors.append(
-                f"Granule count mismatch: expected {expected_new_timesteps} new time steps but found {actual_new_timesteps}. "
-                f"Original dataset had {len(ds_old.time)} timesteps, new dataset has {len(ds_new.time)} timesteps."
-            )
+        if not overwrite:
+            logger.info("Validating granule count consistency...")
+            expected_new_timesteps = len(new_granules)
+            actual_new_timesteps = len(ds_new.time) - len(ds_old.time)
+            if actual_new_timesteps != expected_new_timesteps:
+                errors.append(
+                    f"Granule count mismatch: expected {expected_new_timesteps} new time steps but found {actual_new_timesteps}. "
+                    f"Original dataset had {len(ds_old.time)} timesteps, new dataset has {len(ds_new.time)} timesteps."
+                )
 
         # Check attributes that should remain equal
         logger.info("Checking attributes that should remain unchanged...")
@@ -480,6 +481,7 @@ class MursstUpdater:
         limit_granules: int = None,
         # parallel: str = "lithops",
         parallel: str = None,
+        overwrite_date_range: Optional[Tuple[str, str]] = None,
     ) -> str:
         """
         Main method to update the icechunk store with new data.
@@ -494,15 +496,21 @@ class MursstUpdater:
         logger.info("Finding dates to append to existing store")
         ds_main = self.open_xr_dataset_from_branch("main")
 
-        # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
-        last_date = self.get_timestep_from_ds(ds_main, -5).date()
-        last_timestep = datetime.combine(
-            last_date,
-            datetime.strptime("21:00:01", "%H:%M:%S").time(),
-            tzinfo=timezone.utc,
-        ).isoformat(sep=" ")
-        # only find granules that are older than 10 days (see comments in search_valid_granules for details)
-        end_search = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        if overwrite_date_range is not None:
+            start_date, end_date = overwrite_date_range
+            logger.info(f"Overwrite mode: reprocessing {start_date} to {end_date}")
+            write_kwargs = {"region": "auto"}
+        else:
+            # MUR SST granules have a temporal range of date 1 21:00:00 to date 2 21:00:00
+            last_date = self.get_timestep_from_ds(ds_main, -1).date()
+            last_timestep = datetime.combine(
+                last_date,
+                datetime.strptime("21:00:01", "%H:%M:%S").time(),
+                tzinfo=timezone.utc,
+            ).isoformat(sep=" ")
+            # only find granules that are older than 10 days (see comments in search_valid_granules for details)
+            end_search = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+            write_kwargs = {"append_dim": "time"}
 
         # search for new data
         new_granules = self.find_granules(
@@ -539,8 +547,7 @@ class MursstUpdater:
 
         # Append new data and commit
         session = self.repo.writable_session(branch=self.branchname)
-        # vds.vz.to_icechunk(session.store, append_dim="time")
-        vds.vz.to_icechunk(session.store, region="auto")
+        vds.vz.to_icechunk(session.store, **write_kwargs)
  
         snapshot = session.commit(commit_message)
         logger.info(
@@ -550,7 +557,7 @@ class MursstUpdater:
         if run_tests:
             logger.info("Testing new Dataset from branch")
             try:
-                self.test_new_data(ds_main, new_granules)
+                self.test_new_data(ds_main, new_granules, overwrite=overwrite_date_range is not None)
                 logger.info("Tests passed.")
             except Exception as e:
                 logger.error(f"Tests failed with {e}")

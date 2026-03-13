@@ -94,6 +94,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         dry_run = event.get("dry_run", settings.dry_run)
         run_tests = event.get("run_tests", settings.run_tests)
         limit_granules = event.get("limit_granules", settings.limit_granules)
+        overwrite_start = event.get("overwrite_start_date")
+        overwrite_end = event.get("overwrite_end_date")
+        overwrite_date_range = (overwrite_start, overwrite_end) if overwrite_start and overwrite_end else None
 
         logger.info(
             f"Loaded settings: run_tests={run_tests}, dry_run={dry_run}, limit_granules={limit_granules}"
@@ -113,6 +116,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             dry_run=dry_run,
             limit_granules=limit_granules,
             parallel=False,  # Disable parallel processing in Lambda environment
+            overwrite_date_range=overwrite_date_range,
         )
 
         logger.info(f"Update completed successfully: {result_message}")

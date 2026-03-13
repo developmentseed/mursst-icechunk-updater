@@ -202,6 +202,7 @@ aws s3 rm --recursive "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 
 
 ### Run update logic manually
+
 To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
 
 ```
@@ -221,6 +222,15 @@ and then run:
 ```bash
 export LOCAL_TEST=true
 uv run python src/lambda_function.py
+```
+
+### Run overwrite logic
+
+```json
+{
+    "overwrite_start_date": "2025-01-01",
+    "overwrite_end_date": "2025-01-31"
+}
 ```
 
 ### GH Actions based deployment
