@@ -5,6 +5,7 @@ This is a thin handler that orchestrates the business logic and handles
 Lambda-specific concerns like event processing, error handling, and response formatting.
 """
 
+import argparse
 import json
 import logging
 import os
@@ -141,7 +142,23 @@ if __name__ == "__main__":
     Local testing entry point.
     Set LOCAL_TEST=true and required environment variables.
     """
-    test_event = {}
+    parser = argparse.ArgumentParser(description="Run lambda handler locally")
+    parser.add_argument("--dry-run", action="store_true", default=None)
+    parser.add_argument("--run-tests", action="store_true", default=None)
+    parser.add_argument("--limit-granules", type=int, default=None)
+    parser.add_argument("--overwrite-start-date", default=None)
+    parser.add_argument("--overwrite-end-date", default=None)
+    args = parser.parse_args()
+
+    test_event = {
+        k: v for k, v in {
+            "dry_run": args.dry_run if args.dry_run else None,
+            "run_tests": args.run_tests if args.run_tests else None,
+            "limit_granules": args.limit_granules,
+            "overwrite_start_date": args.overwrite_start_date,
+            "overwrite_end_date": args.overwrite_end_date,
+        }.items() if v is not None
+    }
     test_context = {}
 
     # You'll need to set these for local testing (and activate the .env.dev as described in the README):

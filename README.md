@@ -234,7 +234,14 @@ export LIMIT_GRANULES=3
 and then run:
 ```bash
 export LOCAL_TEST=true
-uv run python src/lambda_function.py
+# run the default function: updates the store up to the most recent date 10 days ago.
+uv run python -m src.lambda_function
+# overwrite data in a range
+uv run python -m src.lambda_function --overwrite-start-date 2024-01-01 --overwrite-end-date 2024-01-31
+# perform a dry run with max 3 granules
+uv run python -m src.lambda_function --dry-run --limit-granules 3
+# skip running tests
+uv run python -m src.lambda_function --run_tests false
 ```
 
 ### Run overwrite logic
