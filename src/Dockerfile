@@ -5,6 +5,8 @@ RUN dnf update -y && \
     dnf install -y findutils && \
     dnf clean all
 
+RUN dnf install -y git
+
 COPY src/requirements.txt .
 RUN pip install -r requirements.txt --target /asset
 
