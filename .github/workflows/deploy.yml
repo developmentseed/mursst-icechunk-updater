@@ -51,7 +51,7 @@ jobs:
 
       - name: Install deploy requirements
         run: |
-          uv sync --all-groups
+          uv sync --group deploy
           npm install -g aws-cdk@v2.*
           cdk --version
 
