@@ -84,9 +84,10 @@ plt.figure()
 with ProgressBar():
     da.mean(['lon', 'lat']).plot()
 ```
+
 > Executes in < 45 seconds  on 16 core/64GB veda hub instance
 
-compare to the non-virtualized workflow
+compare to the non-virtualized workflow:
 
 ```python
 start_date = ds.time.data[0].astype("datetime64[ms]").astype(datetime)
@@ -128,23 +129,6 @@ cd mursst-icechunk-updater
 uv run sync
 ```
 
-### Testing
-
->[!WARNING]
-> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the NASA-VEDA jupyterhub.
-
-Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
-
-To run the complete set of tests:
-
-```bash
-uv run pytest
-```
-
-#### Deployment Testing
-
-After each CI deployment a separate [test workflow of the lambda function](https://github.com/developmentseed/mursst-icechunk-updater/blob/main/.github/workflows/lambda-invocation-test.yml) is fired off to confirm that everything works correctly when deployed. This workflow can also be triggered manually for debugging.
-
 ### Repo organization
 
 ```
@@ -155,18 +139,20 @@ After each CI deployment a separate [test workflow of the lambda function](https
 └── tests/ (unit and integration tests)
 ```
 
-### Environments
+### Testing
 
-The MURSST updater is using different *stages* which are defined via github repository and environment variables.
+>[!WARNING]
+> Running the integration tests requires the user to be in-region (us-west-2) and have both S3 bucket access and EDL credentials configured as environment variables. The current recommendation is to run the tests on the [NASA VEDA jupyterhub](https://hub.openveda.cloud/) ([request access](https://docs.openveda.cloud/user-guide/scientific-computing/getting-access.html)).
 
-**prod**: Production environment writing to a publicly accessible NASA-VEDA bucket. Changes for this env are only deployed upon a new release.
+Make sure the machine has sufficient RAM. The smallest server instances have caused issues in the past.
 
-**staging**: Staging environment that gets changes deployed for any push. The target store here will closely mirror the prod one, and should not need to be rebuilt frequently.
+To run the complete set of tests:
 
-**dev**: Developer environment writing to a scratch bucket with limite retention. Used for local (or hub based) debugging and testing. See below for instructions on how to delete and rebuilt the temporary store.
+```bash
+uv run pytest
+```
 
-
-#### Local setup
+### Local setup
 
 You can generate a local dotenv file by using the `scripts/bootstrap_dotenv.sh` script with the name of a stage as input:
 ```
@@ -184,6 +170,17 @@ You can also set the env file as an environment variable (*recommended*):
 export UV_ENV_FILE=.env.<STAGE>
 ```
 
+### Using uv with jupyter lab
+
+To keep a consistent environment when testing/developing with Jupyter notebooks create a custom kernel:
+
+```bash
+uv sync
+uv run bash
+python -m ipykernel install --user --name=mursstvenv --display-name="MURSST-VENV"
+```
+
+After refreshing your browser window you should be able to select the "MURSST-VENV" kernel from the upper right corner of the jupyter lab notebook interface.
 
 ### Rebuilding the store from scratch
 
@@ -191,7 +188,7 @@ The rebuild script will either create a brand new repository (if the prefix is e
 
 This is preferrable to deleting the store, since it will not interrupt access to the user.
 
-```
+```bash
 uv run python scripts/build_store.py
 ```
 
@@ -203,48 +200,54 @@ uv run python scripts/build_store.py
 > Only do this as a last resort as it might disrupt other folks workflows! This snippet depends on the content of the dotenv file, so make sure to set the correct stage.
 >You might not have permissions to delete objects.
 
-```
+```bash
 uv run --env-file=.env.<STAGE> bash
 echo "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 ```
 
-if you are sure you want to delete the objects displayed run
-```
+if you are sure you want to delete the objects displayed run:
+
+```bash
 aws s3 rm --recursive "$ICECHUNK_DIRECT_PREFIX$STORE_NAME"
 ```
 
-
 ### Run update logic manually
+
+The default functionality is to append new data up until 10 days ago. This is because files produced in the past 10 days are usually considered "interim" products and not the final version. But after 10 days, all products are usually final. The store always has data up until the date 10 days ago.
 
 To run the update logic (the same logic that will be deployed in the AWS lambda) locally, first configure the environment variables as needed:
 
-```
-export DRY_RUN=true # do not commit to the main icechunk branch
-```
-
-```
-export RUN_TESTS=false # omit (expensive) testing
-```
-
-```
-export LIMIT_GRANULES=3
-# only add up to 3 new granules
-```
-
-and then run:
 ```bash
+# do not commit to the main icechunk branch
+export DRY_RUN=true
+# omit (expensive) testing
+export RUN_TESTS=false
+# only add up to 3 new granules
+export LIMIT_GRANULES=3
+# test on a local store
 export LOCAL_TEST=true
 # run the default function: updates the store up to the most recent date 10 days ago.
 uv run python -m src.lambda_function
-# overwrite data in a range
-uv run python -m src.lambda_function --overwrite-start-date 2026-03-01 --overwrite-end-date 2026-03-01
+```
+
+You can also pass environment variables to the CLI:
+
+```bash
 # perform a dry run with max 3 granules
 uv run python -m src.lambda_function --dry-run --limit-granules 3
 # skip running tests
 uv run python -m src.lambda_function --run_tests false
 ```
 
-### Run overwrite logic
+### Overwriting existing data
+
+Overwriting existing data is also possible. This is handy in case files older than 10 days ago are updated. You can overwrite data using the command line:
+
+```bash
+uv run python -m src.lambda_function --overwrite-start-date 2026-03-01 --overwrite-end-date 2026-03-01
+```
+
+or via a payload to the lambda function.
 
 ```json
 {
@@ -253,14 +256,29 @@ uv run python -m src.lambda_function --run_tests false
 }
 ```
 
-### GH Actions based deployment
 
-The infrastructure deployment is achieved via Github Workflows. Depending on the event type (push vs release) the workflow deploys the lambda infrastructure to the predefined environment. This should be used over manual deployment unless there is a good reason.
+## Deployment
+
+Deployment is managed through Github Workflows. See [main.yml](./.github/workflows/main.yml) and [deploy.yml](./.github/workflows/deploy.yml). Depending on the event type (push vs release) the workflow deploys the lambda infrastructure to the predefined environment. This should be used over manual deployment unless there is a good reason.
+
+#### Deployment Testing
+
+After each CI deployment a separate [test workflow of the lambda function](https://github.com/developmentseed/mursst-icechunk-updater/blob/main/.github/workflows/lambda-invocation-test.yml) is fired off to confirm that everything works correctly when deployed. This workflow can also be triggered manually for debugging.
+
+### Environments
+
+The MURSST updater is using different *stages* which are defined via github repository and environment variables.
+
+**prod**: Production environment writing to a publicly accessible NASA-VEDA bucket. Changes for this env are only deployed upon a new release.
+
+**staging**: Staging environment that gets changes deployed for any push. The target store here will closely mirror the prod one, and should not need to be rebuilt frequently.
+
+**dev**: Developer environment writing to a scratch bucket with limite retention. Used for local (or hub based) debugging and testing. See below for instructions on how to delete and rebuilt the temporary store.
 
 #### Manual Deployment
 
-- **Git**: For cloning the repository.
-- **Python 3.12+**: The runtime for both the CDK app and the Lambda function.
+Additional prerequisits:
+
 - **Node.js and npm**: Required for the AWS CDK.
 - **AWS CLI**: For interacting with your AWS account. Ensure it's configured with your credentials (`aws configure`).
 - **Docker**: The Lambda function is packaged as a Docker container, and Docker is required for local testing.
@@ -291,23 +309,6 @@ Regular deployment should happen via github actions but to deploy locally if nee
     uv run cdk deploy
     ```
 
-##### Useful CDK Commands
-
-- `cdk ls`          - List all stacks in the app
-- `cdk synth`       - Generate the CloudFormation template
-- `cdk deploy`      - Deploy the stack to your AWS account/region
-- `cdk diff`        - Compare deployed stack with current state
-- `cdk docs`        - Open CDK documentation
-
-
-### Using uv with jupyter lab
-To keep a consistent environment when testing/developing with Jupyter notebooks create a custom kernel
-```
-uv sync
-uv run bash
-python -m ipykernel install --user --name=mursstvenv --display-name="MURSST-VENV"
-```
-After refreshing your browser window you should be able to select the "MURSST-VENV" kernel from the upper right corner of the jupyter lab notebook interface.
 
 ## A note on MUR SST dates
 
