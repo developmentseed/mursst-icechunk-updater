@@ -166,7 +166,9 @@ class MursstUpdater:
         """Initialize the updater with current timestamp for branch naming."""
         if overwrite_date_range:
             # one issue with this is we will get a conflict error if we try to create this branch more than once
-            self.branchname = f"update_dates_{'-to-'.join(overwrite_date_range)}"
+            import random
+            random_string = str(random.randint(1000, 9999))
+            self.branchname = f"update_dates_{'-to-'.join(overwrite_date_range)}_{random_string}"
         else:
             self.branchname = f"add_time_{datetime.now(timezone.utc).isoformat()}"
         self.store_target = store_target

@@ -276,7 +276,7 @@ Regular deployment should happen via github actions but to deploy locally if nee
 
 2. **Set up environment**
     ```bash
-    uv sync --all-gropus --python 3.12
+    uv sync --all-groups --python 3.12
     ```
 
 3.  **Set IAM Role (Optional)**
