@@ -21,7 +21,7 @@ frozenlist==1.7.0
 fsspec==2025.7.0
 h5netcdf==1.6.3
 h5py==3.14.0
-icechunk==1.0.0
+icechunk>=1.1.2
 idna==3.10
 importlib-resources==6.5.2
 jmespath==1.0.1
