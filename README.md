@@ -311,14 +311,14 @@ After refreshing your browser window you should be able to select the "MURSST-VE
 
 ## A note on MUR SST dates
 
-MUR SST granules' boundaries, both start and end, are `21:00:00Z`. A granule named for date `D` (e.g., `20260302`) has:
+MUR SST granules' boundaries, both start and end, are `21:00:00Z`. A granule named for date `D` (e.g., `D=20260302`) has:
 
 * BeginningDateTime: `D-1 @ 21:00:00Z`
 * EndingDateTime: `D @ 21:00:00Z`
 
-So when you search with an exact datetime of `2026-03-02T21:00:00Z`, CMR returns two granules — the one ending on that date and the one starting on it (which is actually the _next_ day, or `20260303` in this example).
+So when you search with an exact datetime of `2026-03-02T21:00:00Z`, CMR returns two granules — the one ending on that date and the one starting on it. The one starting on it actually represents data for the _next_ day, or `20260303` in this example.
 
-The fix is to cap the end time search at `20:59:59Z` instead of `21:00:00Z`:
+The fix is to cap the search with an end time search at `20:59:59Z` if you want to discover the granule that falls on that day, instead of using `21:00:00Z`. Or, by using a start time of `21:00:01Z` you can ensure the `D` granule is _not_ discovered.
 
 * `2026-03-02T20:59:59Z` is before the `21:00:00Z` boundary, so the `20260303` granule (which starts at `2026-03-02T21:00:00Z`) is excluded.
 * The `20260302` granule (which ends at `2026-03-02T21:00:00Z`) is still included.
