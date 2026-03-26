@@ -5,6 +5,7 @@ This is a thin handler that orchestrates the business logic and handles
 Lambda-specific concerns like event processing, error handling, and response formatting.
 """
 
+import argparse
 import json
 import logging
 import os
@@ -94,6 +95,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         dry_run = event.get("dry_run", settings.dry_run)
         run_tests = event.get("run_tests", settings.run_tests)
         limit_granules = event.get("limit_granules", settings.limit_granules)
+        overwrite_start = event.get("overwrite_start_date")
+        overwrite_end = event.get("overwrite_end_date")
+        overwrite_date_range = (overwrite_start, overwrite_end) if overwrite_start and overwrite_end else None
 
         logger.info(
             f"Loaded settings: run_tests={run_tests}, dry_run={dry_run}, limit_granules={limit_granules}"
@@ -107,12 +111,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Using icechunk store at {store_url}")
 
         # Initialize the updater and run the update
-        updater = MursstUpdater(store_url)
+        updater = MursstUpdater(store_url, overwrite_date_range=overwrite_date_range)
         result_message = updater.update_icechunk_store(
             run_tests=run_tests,
             dry_run=dry_run,
             limit_granules=limit_granules,
             parallel=False,  # Disable parallel processing in Lambda environment
+            overwrite_date_range=overwrite_date_range,
         )
 
         logger.info(f"Update completed successfully: {result_message}")
@@ -137,7 +142,23 @@ if __name__ == "__main__":
     Local testing entry point.
     Set LOCAL_TEST=true and required environment variables.
     """
-    test_event = {}
+    parser = argparse.ArgumentParser(description="Run lambda handler locally")
+    parser.add_argument("--dry-run", action="store_true", default=None)
+    parser.add_argument("--run-tests", action="store_true", default=None)
+    parser.add_argument("--limit-granules", type=int, default=None)
+    parser.add_argument("--overwrite-start-date", default=None)
+    parser.add_argument("--overwrite-end-date", default=None)
+    args = parser.parse_args()
+
+    test_event = {
+        k: v for k, v in {
+            "dry_run": args.dry_run if args.dry_run else None,
+            "run_tests": args.run_tests if args.run_tests else None,
+            "limit_granules": args.limit_granules,
+            "overwrite_start_date": args.overwrite_start_date,
+            "overwrite_end_date": args.overwrite_end_date,
+        }.items() if v is not None
+    }
     test_context = {}
 
     # You'll need to set these for local testing (and activate the .env.dev as described in the README):

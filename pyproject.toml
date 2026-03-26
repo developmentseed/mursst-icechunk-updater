@@ -9,10 +9,10 @@ dependencies = [
     "dask>=2025.7.0",
     "earthaccess>=0.13.0",
     "h5netcdf>=1.6.3",
-    "icechunk>=1.0.0",
+    "icechunk>=1.1.2",
     "pydantic-settings>=2.10.1",
     "requests>=2.25.0",
-    "virtualizarr>=2.0.0",
+    "virtualizarr>=2.5.0",
     "zarr>=3.1.0",
 ]
 
